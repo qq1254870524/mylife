@@ -269,6 +269,30 @@ class BrowserSession:
         except Exception:
             return ""
 
+    @staticmethod
+    def _is_usable_mylife_page(url: str, html: str, body: str, title: str) -> bool:
+        """确认当前文档已经是可采集页面，不能用历史 403 响应覆盖实时页面状态。"""
+        url_value = str(url or "")
+        body_value = str(body or "")
+        title_value = str(title or "")
+        lowered = f"{title_value} {body_value[:2000]}".casefold()
+        if "sorry, you have been blocked" in lowered or "attention required" in title_value.casefold():
+            return False
+        if "pub-multisearch.pubview" in url_value:
+            results, _next_url, no_results = parse_search_results(html, url_value)
+            return bool(
+                results
+                or no_results
+                or re.search(r"\bwe\s+found\s+\d+\s+results?\b", body_value, re.I)
+                or "search-result-heading" in str(html or "")
+            )
+        if re.search(r"/e\d+(?:[/?#]|$)", url_value, re.I):
+            return bool(
+                re.search(r"reputation\s*&\s*contact\s+details|has\s+court\s+or\s+arrest\s+records", title_value, re.I)
+                or re.search(r"\b(?:currently\s+lives|places\s+lived|phone\s+numbers?|email\s+addresses?)\b", body_value, re.I)
+            )
+        return False
+
     def _handle_cloudflare(self) -> None:
         if not page_is_cloudflare_challenge(self.page):
             return
@@ -293,18 +317,24 @@ class BrowserSession:
         self._apply_profile_geolocation()
         body = self._body_text()
         title = str(self.page.title() or "")
+        html = str(self.page.content() or "")
+        usable = self._is_usable_mylife_page(str(self.page.url or url), html, body, title)
         blocked = "sorry, you have been blocked" in body.lower() or "attention required" in title.lower()
-        if blocked or (response and response.status == 403 and not body.strip()):
+        if usable and response and response.status == 403:
+            self.log(
+                f"线程{self.worker_number} 初始 HTTP=403 后已渲染有效 MyLife 页面，保留当前浏览器继续采集"
+            )
+        elif blocked or (response and response.status == 403):
             self.challenge_failures += 1
             raise CloudflareFailure("Cloudflare 拒绝当前出口 IP")
         # 验证通过后的首次响应偶尔只有空壳 HTML；同一已验证上下文重载一次。
-        if "pub-multisearch.pubview" in url and len(body.strip()) < 80:
+        if "pub-multisearch.pubview" in url and len(body.strip()) < 80 and not usable:
             self.page.reload(wait_until="domcontentloaded", timeout=60_000)
             self._pause(1.5, 3.0)
             self._handle_cloudflare()
         self.log(
             f"线程{self.worker_number} DevTools 导航：HTTP={getattr(response, 'status', '')} "
-            f"title={title[:100]} html_chars={len(self.page.content())} url={self.page.url}"
+            f"title={title[:100]} html_chars={len(html)} url={self.page.url}"
         )
         if not self._captured_success and "mylife.com" in self.page.url:
             self.capture_diagnostic("first-success", include_html=False)

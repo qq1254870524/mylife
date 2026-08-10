@@ -75,6 +75,38 @@ class BrowserStrategyTests(unittest.TestCase):
         self.assertIn("唯一结果直接确认", selected.query_strategy)
         self.assertIn("搜索结果唯一", selected.message)
 
+    def test_historical_403_keeps_browser_when_one_result_page_is_already_usable(self) -> None:
+        url = "https://www.mylife.com/pub-multisearch.pubview?searchFirstName=Aronde&searchLastName=Hogg"
+        html = """
+        <html><head><title>Get Reputation Report details, Phone, Address &amp; more.</title></head>
+        <body><h1 class="search-result-heading">We Found 1 Result for Aronde Hogg</h1>
+        <a href="/aronde-hogg/e123">Aronde Torrez Hogg</a><div>Jacksonville, FL, 32218-7372</div></body></html>
+        """
+        page = SimpleNamespace(
+            url=url,
+            goto=lambda *_args, **_kwargs: SimpleNamespace(status=403),
+            title=lambda: "Get Reputation Report details, Phone, Address & more.",
+            content=lambda: html,
+        )
+        session = object.__new__(BrowserSession)
+        session.worker_number = 2
+        session.page = page
+        session.stop_event = threading.Event()
+        session.challenge_failures = 0
+        session._captured_success = True
+        session._pause = lambda *_args: None
+        session._handle_cloudflare = lambda: None
+        session._apply_profile_geolocation = lambda: None
+        session._body_text = lambda: ""
+        session._human_scroll = lambda: None
+        logged: list[str] = []
+        session.log = logged.append
+
+        session._navigate(url)
+
+        self.assertEqual(session.challenge_failures, 0)
+        self.assertTrue(any("已渲染有效 MyLife 页面" in line for line in logged))
+
     def test_clean_former_name_is_used_after_primary_name_has_no_age_match(self) -> None:
         person = self.person()
         person.original = {"former_names": "Jane Smith"}
