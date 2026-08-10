@@ -4,6 +4,7 @@ import select
 import socket
 import socketserver
 import threading
+import time
 from dataclasses import dataclass
 
 
@@ -43,35 +44,49 @@ class _BridgeServer(socketserver.ThreadingTCPServer):
 class _BridgeHandler(socketserver.BaseRequestHandler):
     server: _BridgeServer
 
-    def _remote_connect(self, request_packet: bytes) -> tuple[socket.socket, bytes]:
+    def _remote_connect_once(self, request_packet: bytes) -> tuple[socket.socket, bytes]:
         spec = self.server.remote
         remote = socket.create_connection((spec.host, spec.port), timeout=20)
-        remote.settimeout(20)
-        remote.sendall(b"\x05\x02\x00\x02")
-        version, method = _recv_exact(remote, 2)
-        if version != 5 or method == 0xFF:
+        try:
+            remote.settimeout(20)
+            remote.sendall(b"\x05\x02\x00\x02")
+            version, method = _recv_exact(remote, 2)
+            if version != 5 or method == 0xFF:
+                raise ConnectionError("remote SOCKS authentication method rejected")
+            if method == 2:
+                username = spec.username.encode("utf-8")
+                password = spec.password.encode("utf-8")
+                if len(username) > 255 or len(password) > 255:
+                    raise ValueError("SOCKS username/password exceeds 255 bytes")
+                remote.sendall(b"\x01" + bytes([len(username)]) + username + bytes([len(password)]) + password)
+                auth_version, status = _recv_exact(remote, 2)
+                if auth_version != 1 or status != 0:
+                    raise ConnectionError("remote SOCKS authentication failed")
+            remote.sendall(request_packet)
+            header = _recv_exact(remote, 4)
+            address = _read_address(remote, header[3])
+            port = _recv_exact(remote, 2)
+            response = header + address + port
+            if header[1] != 0:
+                raise ConnectionError(f"remote SOCKS connect failed: {header[1]}")
+            return remote, response
+        except BaseException:
             remote.close()
-            raise ConnectionError("remote SOCKS authentication method rejected")
-        if method == 2:
-            username = spec.username.encode("utf-8")
-            password = spec.password.encode("utf-8")
-            if len(username) > 255 or len(password) > 255:
-                remote.close()
-                raise ValueError("SOCKS username/password exceeds 255 bytes")
-            remote.sendall(b"\x01" + bytes([len(username)]) + username + bytes([len(password)]) + password)
-            auth_version, status = _recv_exact(remote, 2)
-            if auth_version != 1 or status != 0:
-                remote.close()
-                raise ConnectionError("remote SOCKS authentication failed")
-        remote.sendall(request_packet)
-        header = _recv_exact(remote, 4)
-        address = _read_address(remote, header[3])
-        port = _recv_exact(remote, 2)
-        response = header + address + port
-        if header[1] != 0:
-            remote.close()
-            raise ConnectionError(f"remote SOCKS connect failed: {header[1]}")
-        return remote, response
+            raise
+
+    def _remote_connect(self, request_packet: bytes) -> tuple[socket.socket, bytes]:
+        """在把失败返回 Chromium 前短暂重试，吸收动态代理的瞬时断连。"""
+
+        last_error: BaseException | None = None
+        for attempt in range(1, 4):
+            try:
+                return self._remote_connect_once(request_packet)
+            except (OSError, ConnectionError) as exc:
+                last_error = exc
+                if attempt < 3:
+                    time.sleep(0.35 * attempt)
+        assert last_error is not None
+        raise last_error
 
     @staticmethod
     def _relay(client: socket.socket, remote: socket.socket) -> None:

@@ -4,6 +4,7 @@ import socket
 import socketserver
 import threading
 import unittest
+from unittest.mock import patch
 
 from socks_bridge import AuthenticatedSocksBridge, RemoteSocks
 
@@ -85,6 +86,45 @@ class SocksBridgeTests(unittest.TestCase):
                 self.assertEqual(recv_exact(client, 10)[:2], b"\x05\x00")
                 client.sendall(b"bridge-ok")
                 self.assertEqual(recv_exact(client, 9), b"bridge-ok")
+        finally:
+            bridge.stop()
+            remote.shutdown()
+            echo.shutdown()
+            remote.server_close()
+            echo.server_close()
+
+    def test_transient_remote_connect_failures_are_hidden_from_chromium(self) -> None:
+        echo = ThreadedServer(("127.0.0.1", 0), EchoHandler)
+        remote = ThreadedServer(("127.0.0.1", 0), FakeRemoteSocksHandler)
+        threading.Thread(target=echo.serve_forever, daemon=True).start()
+        threading.Thread(target=remote.serve_forever, daemon=True).start()
+        bridge = AuthenticatedSocksBridge(
+            RemoteSocks("127.0.0.1", remote.server_address[1], "user", "pass###")
+        )
+        bridge.start()
+        original_connect = socket.create_connection
+        remote_attempts = 0
+
+        def flaky_connect(address: tuple[str, int], *args: object, **kwargs: object) -> socket.socket:
+            nonlocal remote_attempts
+            if address == ("127.0.0.1", remote.server_address[1]):
+                remote_attempts += 1
+                if remote_attempts < 3:
+                    raise ConnectionRefusedError("transient remote proxy failure")
+            return original_connect(address, *args, **kwargs)
+
+        try:
+            with patch("socks_bridge.socket.create_connection", side_effect=flaky_connect):
+                client = original_connect(("127.0.0.1", bridge.port), timeout=5)
+                with client:
+                    client.sendall(b"\x05\x01\x00")
+                    self.assertEqual(recv_exact(client, 2), b"\x05\x00")
+                    target_port = int(echo.server_address[1])
+                    client.sendall(b"\x05\x01\x00\x01\x7f\x00\x00\x01" + target_port.to_bytes(2, "big"))
+                    self.assertEqual(recv_exact(client, 10)[:2], b"\x05\x00")
+                    client.sendall(b"retry-ok")
+                    self.assertEqual(recv_exact(client, 8), b"retry-ok")
+            self.assertEqual(remote_attempts, 3)
         finally:
             bridge.stop()
             remote.shutdown()

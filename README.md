@@ -54,7 +54,7 @@ host:port:user:password|https://刷新链接
 
 GUI 可用 `＋` 添加，用 `－` 删除。首次启动会从本机 `设计思路.txt` 自动读取符合格式的代理行；GUI 保存项位于 `.mylife_gui_settings.json`，该文件不会进入 Git 仓库或 Release。
 
-Chromium 不支持带账号密码的 SOCKS5 直连，`socks_bridge.py` 会为每套代理自动创建仅监听 `127.0.0.1` 的本地 SOCKS5 桥，再把浏览器固定绑定到对应代理。域名请求会原样交给远端代理解析。
+Chromium 不支持带账号密码的 SOCKS5 直连，`socks_bridge.py` 会为每套代理自动创建仅监听 `127.0.0.1` 的本地 SOCKS5 桥，再把浏览器固定绑定到对应代理。域名请求会原样交给远端代理解析；远端动态代理出现瞬时连接失败时，本地桥会先内部短重试 3 次，再决定是否向浏览器返回失败。
 
 Patchright 的真 headless 模式会影响 Managed Turnstile token 签发，因此 GUI 的“无头”模式内部仍运行真实 Chrome，再只隐藏本次会话新增的窗口；不会触碰用户已有 Chrome 窗口。“小窗口”则保留可见浏览器便于实时观察。
 
