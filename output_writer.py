@@ -14,13 +14,22 @@ RESULT_FIELDS = ["生日", "性别", "星座", "备注原因"]
 
 
 class RealtimeCsvWriter:
-    def __init__(self, output_dir: Path, input_path: Path, input_headers: list[str]) -> None:
+    def __init__(
+        self,
+        output_dir: Path,
+        input_path: Path,
+        input_headers: list[str],
+        *,
+        rebuild: bool = False,
+    ) -> None:
         self.output_dir = output_dir
         self.input_path = input_path
         self.input_headers = input_headers
         self.headers = input_headers + RESULT_FIELDS
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.path = self._select_path()
+        if rebuild and self.path.exists():
+            self.path.unlink()
         self._existing_counts = self._load_signatures()
         self._restore_seen: Counter[str] = Counter()
         self.file = self.path.open("a", encoding="utf-8-sig", newline="")

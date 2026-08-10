@@ -336,7 +336,11 @@ def score_candidate(person: PersonInput, detail: ProfileResult) -> CandidateScor
 
     input_age = _age(person.age)
     candidate_age = _age(detail.age)
-    exact_age = bool(input_age is not None and candidate_age == input_age)
+    birthday_age = _birthday_age(detail.birthday)
+    exact_age = bool(
+        input_age is not None
+        and (candidate_age == input_age or (candidate_age is None and birthday_age == input_age))
+    )
     if exact_age:
         score += 30
         evidence.append("年龄完全一致")
@@ -353,7 +357,6 @@ def score_candidate(person: PersonInput, detail: ProfileResult) -> CandidateScor
             score -= 8
             conflicts.append("年龄不一致")
 
-    birthday_age = _birthday_age(detail.birthday)
     if candidate_age is not None and birthday_age is not None:
         if abs(candidate_age - birthday_age) <= 1:
             score += 3

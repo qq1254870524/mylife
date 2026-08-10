@@ -13,7 +13,7 @@ from typing import Callable
 from browser_worker import BrowserSession, Cancelled, CloudflareFailure
 from database import DatabaseWriter, JobDatabase
 from input_loader import load_people
-from models import PersonInput, RunConfig
+from models import SEARCH_REVISION, PersonInput, RunConfig
 from output_writer import RealtimeCsvWriter
 from proxy_pool import ProxyGeo, ProxyPool, ProxySpec, parse_proxy_line
 from runtime_monitor import RuntimeHealthMonitor
@@ -259,10 +259,18 @@ class AppController:
             headers, people = load_people(self.config.input_file)
             self.database.reset_interrupted()
             inserted = self.database.import_people(people)
+            requeued = self.database.reset_incomplete_birthdays(self.config.input_file, SEARCH_REVISION)
             jobs = self.database.pending_people(self.config.input_file, self.config.max_job_attempts)
             self._total = len(people)
             self._log(f"导入识别 {len(people)} 行，新增数据库任务 {inserted} 条，待处理 {len(jobs)} 条")
-            csv_writer = RealtimeCsvWriter(self.config.output_dir, self.config.input_file, headers)
+            if requeued:
+                self._log(f"搜索策略升级：重试 {requeued} 条旧版空生日结果，并从 SQLite 重建实时 CSV")
+            csv_writer = RealtimeCsvWriter(
+                self.config.output_dir,
+                self.config.input_file,
+                headers,
+                rebuild=bool(requeued),
+            )
             self.output_path = csv_writer.path
             restored = sum(
                 1

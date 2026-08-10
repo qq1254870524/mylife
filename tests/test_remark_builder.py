@@ -26,8 +26,20 @@ class RemarkBuilderTests(unittest.TestCase):
                 "message": "两级搜索均无可采集结果",
             }
         )
-        self.assertIn("姓名+城市州邮编无结果后回退姓名", remark)
+        self.assertIn("搜索方式：姓名+城市州邮编", remark)
         self.assertIn("两级搜索均无可采集结果", remark)
+
+    def test_winning_alias_method_and_full_search_coverage_are_both_recorded(self) -> None:
+        remark = build_result_remark(
+            {
+                "query_strategy": "曾用名(Kyasia Smith)+城市州邮编→年龄分层→多信号",
+                "search_coverage": "姓名+城市州邮编→姓名→曾用名(Kyasia Smith)+城市州邮编",
+                "status": "已匹配生日（高置信度）",
+                "message": "先限定 1 个同龄候选",
+            }
+        )
+        self.assertIn("搜索方式：曾用名(Kyasia Smith)+城市州邮编", remark)
+        self.assertIn("搜索范围：姓名+城市州邮编→姓名→曾用名(Kyasia Smith)+城市州邮编", remark)
 
     def test_invalid_input_explains_no_search(self) -> None:
         remark = build_result_remark(

@@ -109,6 +109,34 @@ class JobDatabase:
             )
             connection.commit()
 
+    def reset_incomplete_birthdays(self, source_path: Path, search_revision: int) -> int:
+        """搜索策略升级后仅重跑旧版空生日结果；同一版本不重复重跑。"""
+
+        with closing(self.connect()) as connection, connection:
+            rows = connection.execute(
+                """
+                SELECT DISTINCT j.id
+                FROM jobs AS j
+                JOIN results AS r ON r.job_id=j.id
+                WHERE j.source_path=?
+                  AND COALESCE(json_extract(r.result_json, '$.birthday'), '')=''
+                  AND COALESCE(json_extract(r.result_json, '$.search_revision'), 0) < ?
+                """,
+                (str(source_path.resolve()), search_revision),
+            ).fetchall()
+            job_ids = [int(row[0]) for row in rows]
+            if not job_ids:
+                return 0
+            placeholders = ",".join("?" for _ in job_ids)
+            connection.execute(f"DELETE FROM results WHERE job_id IN ({placeholders})", job_ids)
+            connection.execute(
+                f"UPDATE jobs SET status='pending', attempts=0, message='', updated_at=? "
+                f"WHERE id IN ({placeholders})",
+                (utc_now(), *job_ids),
+            )
+            connection.commit()
+            return len(job_ids)
+
     def pending_people(self, source_path: Path, max_attempts: int) -> list[tuple[int, PersonInput, int]]:
         with closing(self.connect()) as connection, connection:
             rows = connection.execute(

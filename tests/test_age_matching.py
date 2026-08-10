@@ -110,6 +110,15 @@ class AgeMatchingTests(unittest.TestCase):
         self.assertIn("共同亲属一致2人", scored.evidence)
         self.assertGreaterEqual(scored.strong_categories, 3)
 
+    def test_birthday_derived_age_is_used_when_page_age_is_blank(self) -> None:
+        details = [
+            ProfileResult(1, "https://www.mylife.com/a/e1", full_name="Jane Doe", age="41", birthday="January 1, 1985", location="Denver, CO 80202"),
+            ProfileResult(2, "https://www.mylife.com/b/e2", full_name="Jane Doe", age="", birthday="January 1, 1984", location="Denver, CO 80202"),
+        ]
+        selected = select_best_birthday(self.person(), details, len(details))
+        self.assertEqual(selected.profile_url, "https://www.mylife.com/b/e2")
+        self.assertIn("1 个同龄候选", selected.message)
+
 
 if __name__ == "__main__":
     unittest.main()

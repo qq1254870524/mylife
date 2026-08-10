@@ -112,6 +112,39 @@ class DatabaseOutputTests(unittest.TestCase):
             with (root / "same_MyLife结果.csv").open("r", encoding="utf-8-sig", newline="") as handle:
                 self.assertEqual(len(list(csv.DictReader(handle))), 3)
 
+    def test_old_blank_birthday_is_requeued_once_and_csv_can_rebuild(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            input_path = root / "input.csv"
+            input_path.write_text("name\nJane Doe\n", encoding="utf-8")
+            person = PersonInput(
+                source_path=input_path.resolve(),
+                source_row=2,
+                headers=["name"],
+                original={"name": "Jane Doe"},
+                first_value="Jane Doe",
+                first_name="Jane",
+                last_name="Doe",
+            )
+            database = JobDatabase(root / "state.sqlite3")
+            database.import_people([person])
+            job_id, _, _ = database.pending_people(input_path, 3)[0]
+            old = ProfileResult(1, "", status="无结果", message="old", search_revision=1)
+            output = RealtimeCsvWriter(root, input_path, ["name"])
+            writer = DatabaseWriter(database, output, lambda _message: None)
+            writer.start()
+            writer.put("result", job_id, person, old)
+            writer.put("done", job_id, "old")
+            writer.flush()
+            writer.close()
+            self.assertEqual(database.reset_incomplete_birthdays(input_path, 2), 1)
+            self.assertEqual(database.reset_incomplete_birthdays(input_path, 2), 0)
+            rebuilt = RealtimeCsvWriter(root, input_path, ["name"], rebuild=True)
+            rebuilt.close()
+            with (root / "input_MyLife结果.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                self.assertEqual(list(csv.DictReader(handle)), [])
+            self.assertEqual(database.summary(input_path).get("pending"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

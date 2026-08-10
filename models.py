@@ -5,6 +5,9 @@ from pathlib import Path
 from typing import Any
 
 
+SEARCH_REVISION = 2
+
+
 @dataclass(slots=True)
 class PersonInput:
     source_path: Path
@@ -39,6 +42,7 @@ class SearchResult:
     location: str = ""
     former_names: str = ""
     result_summary: str = ""
+    found_by: str = ""
 
 
 @dataclass(slots=True)
@@ -55,8 +59,10 @@ class ProfileResult:
     result_summary: str = ""
     profile_summary: str = ""
     query_strategy: str = ""
+    search_coverage: str = ""
     status: str = "已提取详情"
     message: str = ""
+    search_revision: int = SEARCH_REVISION
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -72,8 +78,10 @@ class ProfileResult:
             "result_summary": self.result_summary,
             "profile_summary": self.profile_summary,
             "query_strategy": self.query_strategy,
+            "search_coverage": self.search_coverage,
             "status": self.status,
             "message": self.message,
+            "search_revision": self.search_revision,
         }
 
 
