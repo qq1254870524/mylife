@@ -40,7 +40,7 @@ LITERAL_RESULT_2:
 依赖检查通过，已安装项全部跳过。
 SELF_CHECK_OK
 EXIT_STATUS_2: 0
-MODIFIED_BEHAVIOR: location search runs first and name-only runs only after zero location results; all candidates from the selected strategy are age-tiered and scored with name, former name, phone, email, current/past address, ZIP, street number/prefix, city/state, relatives and associates; CSV appends only 生日/性别/星座.
+MODIFIED_BEHAVIOR: location search runs first and name-only runs only after zero location results; all candidates from the selected strategy are age-tiered and scored with name, former name, phone, email, current/past address, ZIP, street number/prefix, city/state, relatives and associates; CSV appends only 生日/性别/星座; a failed proxy channel is retired without consuming the person retry budget and the job is handed to another thread.
 
 LIVE_BROWSER:
 COMMAND: python -B - [one-row direct MyLife AppController probe, 小窗口, max_search_pages=3]

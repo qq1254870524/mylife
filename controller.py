@@ -219,16 +219,28 @@ class AppController:
                     self._log(f"线程{worker_number} 第 {person.source_row} 行处理错误：{message}")
                     if session:
                         session.capture_diagnostic("job-error")
-                    if next_attempt < self.config.max_job_attempts and not self.stop_event.is_set():
+                    proxy_network_error = bool(
+                        proxy_spec and proxy_pool and _is_proxy_network_error(message)
+                    )
+                    if proxy_network_error and not self.stop_event.is_set():
+                        # 通道故障属于代理资源故障，不消耗人员任务的业务重试次数。
+                        writer.put("retry_network", job_id, message)
+                        job_queue.put((job_id, person, attempts))
+                        self._log(f"线程{worker_number} 检测到代理通道错误，刷新出口后重建浏览器")
+                        refreshed_geo = proxy_pool.refresh_after_challenge(proxy_spec, self.stop_event)
+                        if refreshed_geo and not self.stop_event.is_set():
+                            session.rebuild(refreshed_geo)
+                        else:
+                            self._log(
+                                f"线程{worker_number} 当前代理通道仍不可用，停用该浏览器线程；"
+                                "任务已无损回队列，由其他线程继续"
+                            )
+                            break
+                    elif next_attempt < self.config.max_job_attempts and not self.stop_event.is_set():
                         writer.put("retry", job_id, message)
                         job_queue.put((job_id, person, next_attempt))
                         if session:
-                            if proxy_spec and proxy_pool and _is_proxy_network_error(message):
-                                self._log(f"线程{worker_number} 检测到代理通道错误，刷新出口后重建浏览器")
-                                refreshed_geo = proxy_pool.refresh_after_challenge(proxy_spec, self.stop_event)
-                                session.rebuild(refreshed_geo)
-                            else:
-                                session.rebuild()
+                            session.rebuild()
                     else:
                         writer.put("failed", job_id, message)
                 finally:

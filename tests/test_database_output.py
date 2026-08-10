@@ -13,6 +13,37 @@ from output_writer import RealtimeCsvWriter
 
 
 class DatabaseOutputTests(unittest.TestCase):
+    def test_proxy_network_retry_does_not_consume_person_attempt(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            input_path = root / "input.csv"
+            input_path.write_text("name\nJane Doe\n", encoding="utf-8")
+            person = PersonInput(
+                source_path=input_path.resolve(),
+                source_row=2,
+                headers=["name"],
+                original={"name": "Jane Doe"},
+                first_value="Jane Doe",
+                first_name="Jane",
+                last_name="Doe",
+            )
+            database = JobDatabase(root / "state.sqlite3")
+            database.import_people([person])
+            job_id, _, _ = database.pending_people(input_path, 3)[0]
+            output = RealtimeCsvWriter(root, input_path, ["name"])
+            writer = DatabaseWriter(database, output, lambda _message: None)
+            writer.start()
+            writer.put("running", job_id)
+            writer.put("retry_network", job_id, "ERR_SOCKS_CONNECTION_FAILED")
+            writer.flush()
+            writer.close()
+            with closing(sqlite3.connect(database.path)) as connection:
+                status, attempts = connection.execute(
+                    "SELECT status, attempts FROM jobs WHERE id=?", (job_id,)
+                ).fetchone()
+            self.assertEqual(status, "retry")
+            self.assertEqual(attempts, 0)
+
     def test_wal_single_writer_and_realtime_bom_csv(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

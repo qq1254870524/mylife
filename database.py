@@ -241,6 +241,16 @@ class DatabaseWriter(threading.Thread):
                 "UPDATE jobs SET status='retry', message=?, updated_at=? WHERE id=?",
                 (str(message), now, int(job_id)),
             )
+        elif event == "retry_network":
+            job_id, message = payload
+            connection.execute(
+                """
+                UPDATE jobs
+                SET status='retry', attempts=MAX(attempts-1, 0), message=?, updated_at=?
+                WHERE id=?
+                """,
+                (str(message), now, int(job_id)),
+            )
         elif event == "failed":
             job_id, message = payload
             connection.execute(
