@@ -7,7 +7,7 @@ from pathlib import Path
 from input_loader import _encoding
 
 
-def _rewrite_csv(path: Path, completed: set[str]) -> int:
+def _rewrite_csv(path: Path, completed_rows: set[int]) -> int:
     raw = path.read_bytes()
     encoding = _encoding(raw)
     text = raw.decode(encoding)
@@ -20,9 +20,8 @@ def _rewrite_csv(path: Path, completed: set[str]) -> int:
         return 0
     kept = [rows[0]]
     removed = 0
-    for row in rows[1:]:
-        first = str(row[0] if row else "").strip()
-        if first and first in completed:
+    for source_row, row in enumerate(rows[1:], 2):
+        if source_row in completed_rows:
             removed += 1
         else:
             kept.append(row)
@@ -36,18 +35,22 @@ def _rewrite_csv(path: Path, completed: set[str]) -> int:
     return removed
 
 
-def _rewrite_txt(path: Path, completed: set[str]) -> int:
+def _rewrite_txt(path: Path, completed_rows: set[int]) -> int:
     raw = path.read_bytes()
     encoding = _encoding(raw)
     lines = raw.decode(encoding).splitlines()
     removed = 0
     kept: list[str] = []
+    logical_source_row = 2
     for line in lines:
-        first = line.strip()
-        if first and first in completed:
+        if not line.strip():
+            kept.append(line)
+            continue
+        if logical_source_row in completed_rows:
             removed += 1
         else:
             kept.append(line)
+        logical_source_row += 1
     temp = path.with_name(f".{path.name}.mylife_rebuild.tmp")
     with temp.open("w", encoding=encoding, newline="") as handle:
         handle.write("\n".join(kept) + ("\n" if kept else ""))
@@ -57,22 +60,21 @@ def _rewrite_txt(path: Path, completed: set[str]) -> int:
     return removed
 
 
-def _rewrite_xlsx(path: Path, completed: set[str]) -> int:
+def _rewrite_xlsx(path: Path, completed_rows: set[int]) -> int:
     import openpyxl
 
     keep_vba = path.suffix.lower() == ".xlsm"
     workbook = openpyxl.load_workbook(path, keep_vba=keep_vba)
     removed = 0
     try:
-        for sheet in workbook.worksheets:
-            delete_rows: list[int] = []
-            for row_index in range(2, sheet.max_row + 1):
-                first = str(sheet.cell(row_index, 1).value or "").strip()
-                if first and first in completed:
-                    delete_rows.append(row_index)
-            for row_index in reversed(delete_rows):
-                sheet.delete_rows(row_index, 1)
-            removed += len(delete_rows)
+        sheet = workbook.active
+        delete_rows = sorted(
+            (row_index for row_index in completed_rows if 2 <= row_index <= sheet.max_row),
+            reverse=True,
+        )
+        for row_index in delete_rows:
+            sheet.delete_rows(row_index, 1)
+        removed = len(delete_rows)
         temp = path.with_name(f".{path.stem}.mylife_rebuild{path.suffix}")
         workbook.save(temp)
     finally:
@@ -81,18 +83,18 @@ def _rewrite_xlsx(path: Path, completed: set[str]) -> int:
     return removed
 
 
-def remove_completed_rows(path: str | Path, completed_first_values: set[str]) -> int:
-    """仅在整批处理结束后调用；通过同目录临时文件一次性原子重建输入。"""
+def remove_completed_rows(path: str | Path, completed_source_rows: set[int]) -> int:
+    """仅在整批结束后按原始源行号重建，重复首列值不会误删未完成行。"""
 
     source = Path(path).resolve()
-    completed = {str(value).strip() for value in completed_first_values if str(value).strip()}
-    if not completed:
+    completed_rows = {int(value) for value in completed_source_rows if int(value) >= 2}
+    if not completed_rows:
         return 0
     suffix = source.suffix.lower()
     if suffix in {".xlsx", ".xlsm"}:
-        return _rewrite_xlsx(source, completed)
+        return _rewrite_xlsx(source, completed_rows)
     if suffix == ".csv":
-        return _rewrite_csv(source, completed)
+        return _rewrite_csv(source, completed_rows)
     if suffix == ".txt":
-        return _rewrite_txt(source, completed)
+        return _rewrite_txt(source, completed_rows)
     raise ValueError(f"不支持重建的文件类型：{suffix}")

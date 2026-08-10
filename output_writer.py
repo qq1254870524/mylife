@@ -4,25 +4,12 @@ import csv
 import hashlib
 import json
 import os
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 
-RESULT_FIELDS = [
-    "mylife_result_index",
-    "mylife_full_name",
-    "mylife_age",
-    "mylife_birthday",
-    "mylife_location",
-    "mylife_former_names",
-    "mylife_profile_url",
-    "mylife_result_summary",
-    "mylife_profile_summary",
-    "mylife_query_strategy",
-    "mylife_status",
-    "mylife_message",
-    "mylife_created_at",
-]
+RESULT_FIELDS = ["生日", "性别", "星座"]
 
 
 class RealtimeCsvWriter:
@@ -33,11 +20,30 @@ class RealtimeCsvWriter:
         self.headers = input_headers + RESULT_FIELDS
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.path = self._select_path()
+        self._existing_counts = self._load_signatures()
+        self._restore_seen: Counter[str] = Counter()
         self.file = self.path.open("a", encoding="utf-8-sig", newline="")
         self.writer = csv.DictWriter(self.file, fieldnames=self.headers, extrasaction="ignore")
         if self.path.stat().st_size == 0:
             self.writer.writeheader()
             self._flush()
+
+    def _row(self, original: dict[str, str], result: dict[str, Any], created_at: str) -> dict[str, Any]:
+        row: dict[str, Any] = {header: original.get(header, "") for header in self.input_headers}
+        row["生日"] = result.get("birthday", "")
+        row["性别"] = result.get("gender", "")
+        row["星座"] = result.get("zodiac", "")
+        return row
+
+    def _signature(self, row: dict[str, Any]) -> str:
+        payload = {key: row.get(key, "") for key in self.headers}
+        return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+
+    def _load_signatures(self) -> Counter[str]:
+        if not self.path.exists() or self.path.stat().st_size == 0:
+            return Counter()
+        with self.path.open("r", encoding="utf-8-sig", newline="") as handle:
+            return Counter(self._signature(dict(row)) for row in csv.DictReader(handle))
 
     def _select_path(self) -> Path:
         base = self.output_dir / f"{self.input_path.stem}_MyLife结果.csv"
@@ -54,26 +60,24 @@ class RealtimeCsvWriter:
         self.file.flush()
         os.fsync(self.file.fileno())
 
-    def append(self, original: dict[str, str], result: dict[str, Any], created_at: str) -> None:
-        row = {header: original.get(header, "") for header in self.input_headers}
-        mapping = {
-            "mylife_result_index": result.get("result_index", ""),
-            "mylife_full_name": result.get("full_name", ""),
-            "mylife_age": result.get("age", ""),
-            "mylife_birthday": result.get("birthday", ""),
-            "mylife_location": result.get("location", ""),
-            "mylife_former_names": result.get("former_names", ""),
-            "mylife_profile_url": result.get("profile_url", ""),
-            "mylife_result_summary": result.get("result_summary", ""),
-            "mylife_profile_summary": result.get("profile_summary", ""),
-            "mylife_query_strategy": result.get("query_strategy", ""),
-            "mylife_status": result.get("status", ""),
-            "mylife_message": result.get("message", ""),
-            "mylife_created_at": created_at,
-        }
-        row.update(mapping)
+    def append(
+        self,
+        original: dict[str, str],
+        result: dict[str, Any],
+        created_at: str,
+        *,
+        restoring: bool = False,
+    ) -> bool:
+        row = self._row(original, result, created_at)
+        signature = self._signature(row)
+        if restoring:
+            self._restore_seen[signature] += 1
+            if self._restore_seen[signature] <= self._existing_counts[signature]:
+                return False
         self.writer.writerow(row)
         self._flush()
+        self._existing_counts[signature] += 1
+        return True
 
     def close(self) -> None:
         if not self.file.closed:

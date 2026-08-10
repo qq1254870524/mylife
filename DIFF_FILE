@@ -1,420 +1,2121 @@
-diff --git a/.gitattributes b/.gitattributes
-new file mode 100644
-index 0000000..4da767c
---- /dev/null
-+++ b/.gitattributes
-@@ -0,0 +1,9 @@
-+*.cmd binary
-+*.py text eol=lf
-+*.md text eol=lf
-+*.txt text eol=lf
-+*.sh text eol=lf
-+.gitattributes text eol=lf
-+.gitignore text eol=lf
-+DIFF_FILE text eol=lf
-+MODIFIED_FILE text eol=lf
+CHANGED_BRANCH: main
+CHANGED_FIELDS: age_tiered_multi_signal_identity_match+birthday_gender_zodiac_output+location_first_name_fallback+detail_x_then_back+source_row_rebuild+counted_csv_replay+runtime_health_devtools+proxy_channel_refresh
+BASE_COMMIT: 24588fa8d50d2fbd5611d9a040b9c0452966ebb5
+FORMAT: git apply compatible UTF-8 patch; artifact files excluded to avoid recursion.
+
 diff --git a/CHANGELOG.md b/CHANGELOG.md
-index cf9444f..f9cf645 100644
+index f9cf645..075c8af 100644
 --- a/CHANGELOG.md
 +++ b/CHANGELOG.md
-@@ -1,5 +1,12 @@
+@@ -1,5 +1,21 @@
  # 更新日志
- 
-+## v1.0.1 - 2026-08-11
+
++## v1.1.0 - 2026-08-11
 +
-+- 修复 Windows CMD 启动器使用纯 LF 换行时被 `cmd.exe` 错位解析的问题。
-+- 启动器改为明确保存 CRLF 字节，并通过 `.gitattributes` 禁止 Git/Release 包再次把 `.cmd` 规范化成 LF。
-+- 环境变量赋值增加引号，失败时先保存真实错误码再暂停退出。
-+- Python 功能模块和 `设计思路.txt` 均未改动。
++- 输入识别新增年龄，并可从 `current_address` 补齐城市、州和邮编。
++- 严格按设计顺序搜索：先遍历姓名+城市州邮编的全部分页；该策略零结果时才回退纯姓名并遍历其全部分页。
++- 新增独立 `identity_matcher.py`：先限定同龄候选；无同龄时回退全部候选；综合姓名/曾用名、完整电话/后 7 位/前三位区号、邮箱、完整当前/曾用地址、邮编、门牌号及前 2 位、城市州、亲属和关联人评分。
++- 电话前三位和门牌号前 2 位只作弱证据；门牌前缀必须同时匹配街道，避免常见数字误合并。
++- 生日是否公开只用于身份同分决胜，不再用“有生日”覆盖身份关系更强但生日未公开的候选。
++- 详情采集新增生日、性别、星座，结果 CSV 只在全部原列最后追加 `生日/性别/星座`。
++- 每个详情完成后按指定动作关闭可见弹层 X，再后退一步回搜索列表；异常时直达列表兜底。
++- 详情失败改为整条任务重试，不再把采集失败误记为完成。
++- 修复完全相同重复输入被 CSV 内容哈希去重导致少行；改为计数式 SQLite→CSV 恢复，既保留合法重复行又保证断点回放幂等。
++- 输入重建改为按精确源行号执行，避免首列重复时误删未处理行，并保留 XLSX 的其他工作表。
++- 新增 SQLite→实时 CSV 自动补写、运行健康快照、DevTools 网络错误、网页源码和诊断截图。
++- 检测浏览器 `ERR_SOCKS_CONNECTION_FAILED` 等代理通道错误后自动触发出口刷新并重建浏览器。
++- 增加 `--auto-start`，可载入上次 GUI 配置后直接重新开始。
 +
- ## v1.0.0 - 2026-08-11
- 
- - 完成正式模块化架构，每个稳定功能独立维护。
-diff --git a/MODIFIED_FILE b/MODIFIED_FILE
-index 258c172..b1c96dc 100644
---- a/MODIFIED_FILE
-+++ b/MODIFIED_FILE
-@@ -1,38 +1,12 @@
- CHANGED_BRANCH: main
--CHANGED_FIELDS: modular_gui+sqlite_wal+single_db_writer+adaptive_input+realtime_utf8_bom_csv+authenticated_socks_bridge+patchright_headful_hidden+continuous_turnstile_poll+proxy_geo+atomic_input_rebuild
-+CHANGED_FIELDS: launcher_crlf_bytes+git_cmd_no_text_normalization+quoted_environment_assignment+preserved_exit_code
- FORMAL_TARGET: C:\Users\zhang\Desktop\mylife
--PRIMARY_ENTRY: C:\Users\zhang\Desktop\mylife\main.py
--MODIFIED_FILE_COUNT: 32
-+PRIMARY_MODIFIED_FILE: C:\Users\zhang\Desktop\mylife\启动MyLife正式版.cmd
-+MODIFIED_FILE_COUNT: 6
- FILES:
--47742ED0DF2242CEA63D01E6FD726401ECEEF900DDD729D2611F33F810C5DB83      212 .gitignore
--877A046A258BFF7EDB68338EB15A44302D0EF1014D076040ED6C454A105B7C86     1551 bootstrap.py
--088EC00250BA3EF7F6A268E89AF2A009C3133A86AE424483C3D344E13659A9EC    14202 browser_worker.py
--3057C079305299B844D3ADFB9E595A85E6D330156B7026E831F78C1DC7B0F8F1     1743 CHANGELOG.md
--1F3D32D714F1E22AF0D8FCA97ABEC061E78B7B76C0D839C921687CFC6A339FC4     8469 cloudflare_handler.py
--30BA6F6C0FBC8AC443E96B7B1B5BBC2F3E93EB100FEBA58AB56A3C70F50FCBF1    11681 controller.py
--3AE37CB9AA05A1B5B320C570D9E46342B78581BA9EBB3246BD464977E9FE626B     9313 database.py
--0A641F417C987F49C5270E64D219F789A6629EA08D441C346E7D8E79B413E4FA    11560 gui.py
--C0A02757A73ABF0649B6A7127390FB2E3F537BDD2B8473D89CB9C8D92F17C872     7453 input_loader.py
--084FDEEEC187B9905255E31ED778AD99EAAFDCAF9C45D48765F39010B9F82651      822 main.py
--71330DB527F02C5FB148DA3A6763025437677A39B500627A79981F69A0216997     2211 models.py
--973FF20BC6CDF72609BC0B36DEC469D9164E3A5EBDA67433CFF30CBE9E02C198     6296 mylife_parser.py
--00FDC86AEBBDE53C6184FC4D4E4C71731E506413EC3275DF792C1A964E870544     3357 output_writer.py
--DD67FD0721D1853351DAA7A30B48D031CDBE025FB210B25E69685D2A341AB4B8     8666 proxy_pool.py
--C2A13214DAEDC6F3DE8D9A9C41636D84EEDEEE772D5029B03997C68ADADD29C7     3843 README.md
--8201BAB97950FF155217289609550130A8DC0AEFCCC2CADE93702A0CB00C7DD3     1663 RELEASE_NOTES_v1.0.0.md
--58EDDBC52612DE2C6297F091E82E67DF9AEBB2F7DF470F3A8DC40F1B5BE4943E      112 requirements.txt
--7508EFBD88ADD5CE443F7F3DC82E381799237EDFCF165629A83FD191D61CC975     2000 ROLLBACK.sh
--01FA75833CD149496CE71F10009FAC69FEAE2B31D46DFD6987BB08FA8940ED6C     5827 socks_bridge.py
--C1DA610A2555FFDB0E937C454C65648F5FDF1467A111D2A08971A764B3F10A53     3227 source_rewriter.py
--01BA4719C80B6FE911B091A7C05124B64EEECE964E09C058EF8F9805DACA546B        1 tests/__init__.py
--1F87B520190E926305F5C0D0934466DD1B2D9AF6618E7E1B1C044D02FF120375     2590 tests/test_cloudflare_handler.py
--D80B0142082A0F97DFFA2AC4A82B0177382EA4A25E4F2E2F78C3644A0A3F62D2     2953 tests/test_controller_offline.py
--8F713D0194DE4B5E9458D639D1435306366BC2463B85F0ABC362B9D224562029     2399 tests/test_database_output.py
--DB50A825B7DDC75C31189654BEB51227A39DB6C2E9C9D9D2FDD0261880B36936     2185 tests/test_input_loader.py
--F8607353E2FA4BA0F89A765A2806D5A3661DD99AABAA5C80C699BF8E1871BD06     2460 tests/test_parser.py
--1F4DACFBA5E13F7FE3D6CF0EE15F0776FEAE3D832A5EC5085B5FC9961392B67F     1776 tests/test_proxy_pool.py
--0207A13AD90A8534BAED41C042C2448230657247400AB510B9036A95D6963E54     3467 tests/test_socks_bridge.py
--716DAAF6018F7B7ACC9A218E754D68EEBA56DA814DDB88804CD43928EE1742FA     1622 tests/test_source_rewriter.py
--81108815D97F6B698948DFD5ABFA7F83676B72D5B4C632338273BF20C0B84B88     1046 tests/test_turnstile_harvester.py
--B9C7C0E54C64129A8042B7E30E8F3B7536C8ED664CD308C8AE0367732C9F8E3D       61 version.py
--64837F9A1477162492D59D571839DC17C9C1D7264C3A4B10DCBC2D1C70FB1352      283 启动MyLife正式版.cmd
-+8DDEE13394AAE26B5737E6A5B49F5E8A2634856566A333B5ECF3E59C44E29377      180 .gitattributes
-+5048A4C55EE2D901D382159A8EEB2256F2FF0365D1036F3F2D690B21612CCBFF     2135 CHANGELOG.md
-+BAEB420295E7ABB2398CB0CFD13282C479F37F6FA9A0A0773ACD459591411940      405 RELEASE_NOTES_v1.0.1.md
-+2E39FFC64454001D252FE83FC33DE07C89A05B693C20647D4A5FB75B8BCFF7C4     2241 ROLLBACK.sh
-+8740E1202A509450D8164DECBB30E06C5D9E307209FE1C9D3916E8A59E52798C       61 version.py
-+C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF      372 启动MyLife正式版.cmd
-diff --git a/RELEASE_NOTES_v1.0.1.md b/RELEASE_NOTES_v1.0.1.md
+ ## v1.0.1 - 2026-08-11
+
+ - 修复 Windows CMD 启动器使用纯 LF 换行时被 `cmd.exe` 错位解析的问题。
+diff --git a/README.md b/README.md
+index c155a6f..a28629a 100644
+--- a/README.md
++++ b/README.md
+@@ -1,6 +1,6 @@
+ # MyLife 数据采集正式版
+
+-版本：`1.0.0`
++版本：`1.1.0`
+
+ ## 启动
+
+@@ -13,16 +13,20 @@
+ 启动器会先检查依赖；已经安装的依赖全部跳过，缺少的依赖才会自动下载。GUI 支持：
+
+ - `TXT / CSV / XLSX / XLSM` 自动识别；
+-- 输入任意列顺序，优先识别名、姓、城市、州、邮编、完整姓名和地址；
++- 输入任意列顺序，识别名、姓、年龄、城市、州、邮编、完整姓名、当前地址、曾用地址、手机号、邮箱和关联资料；
+ - 原输入列原样位于结果前部，MyLife 结果字段追加在后部；
+ - 多浏览器处理线程 + 单独 SQLite 写入线程；
+ - SQLite `WAL` 断点状态和 UTF-8 BOM CSV 实时落盘；
+ - “姓名+城市州邮编”优先，找不到时自动回退“姓名”；
+-- 遍历搜索结果分页，再逐条进入详情采集生日；
++- 先采集“姓名+城市州邮编”的全部分页候选；只有该搜索没有结果时才回退“姓名”搜索；
++- 逐条进入详情采集年龄、生日、性别、星座，关闭可见弹层后后退一步回搜索列表；
++- 先限定同龄候选，再以姓名、完整电话、电话前三位、邮箱、当前/曾用地址、邮编、门牌号、城市州、亲属和关联人多信号评分；
++- 只输出身份得分最高的一位，生日是否公开不会覆盖更强身份关系；
+ - 小窗口/无头两种浏览器模式；
+ - 动态 SOCKS5 代理池、连通性检查、IP 地理时区/语言同步、3 分钟刷新冷却；
+ - 停止时结束所有工作线程和浏览器，并删除浏览器缓存；
+ - 正常批次结束后才一次性原子重建输入文件，不在处理中删除 XLSX 行。
++- `health.json` 实时记录数据库、CSV 字段数量、线程、日志和浏览器诊断状态。
+
+ ## 输入建议
+
+@@ -60,7 +64,7 @@ Patchright 的真 headless 模式会影响 Managed Turnstile token 签发，因
+ - SQLite：`输出目录/.mylife_runtime/state.sqlite3`
+ - 日志：`输出目录/logs/run_YYYYMMDD_HHMMSS.log`
+
+-CSV 每写一行都会 `flush + fsync`。输出文件首列保持为输入首列；批次正常结束后，输入文件中首列已经出现在输出首列的整行会被一次性删除。技术失败且没有明确输出的行会保留，供下次断点继续。
++CSV 每写一行都会 `flush + fsync`。输出完整保留原输入列，并只在最后追加 `生日`、`性别`、`星座`。批次正常结束后按原始源行号一次性删除已经明确输出的行；重复首列或完全相同的重复输入不会误删、漏写。技术失败行保留供下次继续。SQLite 已有结果可自动回放补齐被意外删除的实时 CSV，回放不会重复已有行。
+
+ ## 模块
+
+@@ -71,6 +75,7 @@ CSV 每写一行都会 `flush + fsync`。输出文件首列保持为输入首列
+ | `gui.py` | GUI、代理增删、实时监控 |
+ | `controller.py` | 生命周期、线程、断点、批次收尾 |
+ | `browser_worker.py` | Patchright 浏览器、人类式节奏、搜索/详情流程 |
++| `identity_matcher.py` | 年龄分层、多信号身份评分、唯一候选选择 |
+ | `cloudflare_handler.py` | 持续轮询晚加载 Turnstile 控件并执行真实鼠标点击 |
+ | `turnstile_harvester.py` | 已有 Cloudflare/Turnstile 模块（正式版未改） |
+ | `proxy_pool.py` | 代理解析、检查、刷新、地理信息、本地桥 |
+@@ -80,6 +85,7 @@ CSV 每写一行都会 `flush + fsync`。输出文件首列保持为输入首列
+ | `database.py` | SQLite WAL 与单写线程 |
+ | `output_writer.py` | UTF-8 BOM CSV 实时输出 |
+ | `source_rewriter.py` | 批次结束后一次性重建输入 |
++| `runtime_monitor.py` | 数据库/CSV/线程/日志实时健康快照 |
+ | `models.py` | 数据模型 |
+
+ ## 验证
+diff --git a/RELEASE_NOTES_v1.1.0.md b/RELEASE_NOTES_v1.1.0.md
 new file mode 100644
-index 0000000..0a5130a
+index 0000000..f04f55e
 --- /dev/null
-+++ b/RELEASE_NOTES_v1.0.1.md
-@@ -0,0 +1,6 @@
-+# MyLife v1.0.1 启动器热修复
++++ b/RELEASE_NOTES_v1.1.0.md
+@@ -0,0 +1,19 @@
++# MyLife v1.1.0 正式版
 +
-+- 修复 `启动MyLife正式版.cmd` 因纯 LF 换行导致 Windows `cmd.exe` 把命令截断的问题。
-+- 启动器现在固定使用 CRLF，Release ZIP 中也保留 CRLF。
-+- Python 功能模块、Cloudflare 处理、代理池、数据库和输入输出逻辑均未修改。
-+- 已通过批处理真实解析测试、18 项单元/集成测试和 `main.py --check`。
-diff --git a/ROLLBACK.sh b/ROLLBACK.sh
-index 53f4c26..1d6eb04 100755
---- a/ROLLBACK.sh
-+++ b/ROLLBACK.sh
-@@ -8,44 +8,59 @@ from __future__ import annotations
- 
- import hashlib
- import os
--import shutil
--import stat
-+import subprocess
++本版将生日选择从“仅按搜索顺序”升级为“采集全部候选后进行年龄分层和多信号身份匹配”，并在原输入列最后追加生日、性别、星座。
++
++## 核心改进
++
++- 先搜索姓名+城市州邮编；零结果时才回退姓名搜索；对命中策略的全部候选进行同龄优先和多信号匹配。
++- 支持姓名/曾用名、电话、邮箱、当前和曾用地址、邮编、门牌、城市州、亲属和关联人证据。
++- 电话前三位、门牌号前 2 位只作为受约束的辅助证据。
++- CSV 最后固定新增 `生日`、`性别`、`星座` 三列。
++- 详情页关闭弹层后后退回搜索列表，继续下一个候选。
++- 精确源行重建、合法重复行保留、SQLite→CSV 断点补写。
++- 实时 `health.json`、DevTools 网络日志、失败网页源码和截图。
++- 浏览器代理通道错误自动刷新出口并重建会话。
++
++## 验证
++
++- 离线单元/集成测试覆盖身份评分、年龄回退、电话/地址弱证据、重复输入、断点回放、输入重建和三列解析。
++- MyLife 真实浏览器链路验证了全部候选、详情采集、后退搜索列表、生日/性别/星座输出和批次清理。
+diff --git a/browser_worker.py b/browser_worker.py
+index 4a0df04..7dea3e1 100644
+--- a/browser_worker.py
++++ b/browser_worker.py
+@@ -6,10 +6,12 @@ import threading
+ import time
  import sys
+ import ctypes
++from datetime import datetime
  from pathlib import Path
- 
- root = Path(sys.argv[1]).resolve()
--expected = {
--    "turnstile_harvester.py": "BEA2D6F251594CABDF5748FC24A188D18DF1DA9E8AB93D5394D4F1637B046654",
--    "测试文件1.xlsx": "9D00BD8F72DBD0CFF6E7AD380F62CAD31397C45F32B2D9C4C03121325158EC36",
--    "测试文件2.csv": "7F74F23E2B56656D468EDBE620E46FF12342D3007DBDF5E51514E41604772DC9",
--    "设计思路.txt": "8588065E7D5F193A614CF1439417EF7CFB15C5450702F0A7BE86052B5918D94A",
--}
--for name, digest in expected.items():
--    path = root / name
--    if not path.is_file():
--        raise SystemExit(f"ROLLBACK_ABORT missing original: {path}")
--    actual = hashlib.sha256(path.read_bytes()).hexdigest().upper()
--    if actual != digest:
--        raise SystemExit(f"ROLLBACK_ABORT original hash changed: {name}")
--
--files = {
--    ".gitignore", ".mylife_gui_settings.json", "bootstrap.py", "browser_worker.py",
--    "CHANGELOG.md", "cloudflare_handler.py", "controller.py", "database.py", "DIFF_FILE",
--    "gui.py", "input_loader.py", "main.py", "models.py", "MODIFIED_FILE", "mylife_parser.py",
--    "output_writer.py", "proxy_pool.py", "README.md", "RELEASE_NOTES_v1.0.0.md", "requirements.txt", "ROLLBACK.sh",
--    "socks_bridge.py", "source_rewriter.py", "VERIFICATION.txt", "version.py", "启动MyLife正式版.cmd",
-+base_commit = "91399689e0077374c151c56ded7a5d7e16d6b2d2"
-+launcher = "启动MyLife正式版.cmd"
-+expected_fixed = "C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF"
-+expected_original = "64837F9A1477162492D59D571839DC17C9C1D7264C3A4B10DCBC2D1C70FB1352"
+ from typing import Callable
+
+ from models import PersonInput, ProfileResult, SearchResult
++from identity_matcher import select_best_identity
+ from mylife_parser import build_search_url, parse_profile_html, parse_search_results
+ from proxy_pool import ProxyBridge, ProxyGeo, ProxySpec, cleanup_profile_directory
+ from cloudflare_handler import wait_cloudflare_interactive
+@@ -18,6 +20,14 @@ from turnstile_harvester import page_is_cloudflare_challenge
+ LogFn = Callable[[str], None]
+
+
++def select_best_birthday(
++    person: PersonInput,
++    details: list[ProfileResult],
++    total_candidates: int,
++) -> ProfileResult:
++    return select_best_identity(person, details, total_candidates)
 +
-+if not (root / ".git").exists():
-+    raise SystemExit(f"ROLLBACK_ABORT missing git metadata: {root}")
-+current = hashlib.sha256((root / launcher).read_bytes()).hexdigest().upper()
-+if current != expected_fixed:
-+    raise SystemExit(f"ROLLBACK_ABORT launcher hash mismatch: {current}")
 +
-+def git_bytes(*args: str) -> bytes:
-+    process = subprocess.run(
-+        ["git", "-C", str(root), *args],
-+        stdout=subprocess.PIPE,
-+        stderr=subprocess.PIPE,
+ def _chrome_window_handles() -> set[int]:
+     if sys.platform != "win32":
+         return set()
+@@ -77,6 +87,7 @@ class BrowserSession:
+         stop_event: threading.Event,
+         log: LogFn,
+         max_search_pages: int = 50,
++        diagnostics_dir: Path | None = None,
+     ) -> None:
+         self.worker_number = worker_number
+         self.profile_dir = profile_dir
+@@ -86,6 +97,7 @@ class BrowserSession:
+         self.stop_event = stop_event
+         self.log = log
+         self.max_search_pages = max_search_pages
++        self.diagnostics_dir = diagnostics_dir
+         self.playwright = None
+         self.context = None
+         self.page = None
+@@ -93,6 +105,7 @@ class BrowserSession:
+         self.challenge_failures = 0
+         self._profile_geolocation_applied = False
+         self._hidden_windows: set[int] = set()
++        self._captured_success = False
+
+     def _cancelled(self) -> bool:
+         return self.stop_event.is_set()
+@@ -142,6 +155,7 @@ class BrowserSession:
+         self.context = self.playwright.chromium.launch_persistent_context(**options)
+         self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
+         self.page.set_default_timeout(30_000)
++        self._attach_debug_events()
+         if hide_window:
+             self._hidden_windows = _hide_new_chrome_windows(previous_windows)
+             if not self._hidden_windows:
+@@ -150,6 +164,43 @@ class BrowserSession:
+         self._profile_geolocation_applied = False
+         self.log(f"线程{self.worker_number} 浏览器已启动（{self.mode}）")
+
++    def _attach_debug_events(self) -> None:
++        if not self.page:
++            return
++        try:
++            self.page.on("pageerror", lambda error: self.log(f"线程{self.worker_number} DevTools pageerror: {error}"))
++            self.page.on(
++                "requestfailed",
++                lambda request: self.log(
++                    f"线程{self.worker_number} DevTools requestfailed: {request.method} {request.url}"
++                ),
++            )
++            self.page.on(
++                "response",
++                lambda response: self.log(
++                    f"线程{self.worker_number} DevTools HTTP {response.status}: {response.url}"
++                )
++                if response.status >= 400 and response.request.resource_type == "document"
++                else None,
++            )
++        except Exception:
++            pass
++
++    def capture_diagnostic(self, reason: str, include_html: bool = True) -> None:
++        if not self.page or not self.diagnostics_dir:
++            return
++        try:
++            self.diagnostics_dir.mkdir(parents=True, exist_ok=True)
++            safe = re.sub(r"[^A-Za-z0-9_-]+", "_", reason)[:50] or "snapshot"
++            stem = f"worker-{self.worker_number}_{datetime.now():%Y%m%d_%H%M%S_%f}_{safe}"
++            image = self.diagnostics_dir / f"{stem}.png"
++            self.page.screenshot(path=str(image), full_page=False)
++            if include_html:
++                (self.diagnostics_dir / f"{stem}.html").write_text(self.page.content(), encoding="utf-8")
++            self.log(f"线程{self.worker_number} 诊断截图：{image}")
++        except Exception as exc:
++            self.log(f"线程{self.worker_number} 诊断截图失败：{type(exc).__name__}: {exc}")
++
+     def close(self) -> None:
+         context, self.context = self.context, None
+         if context:
+@@ -249,6 +300,13 @@ class BrowserSession:
+             self.page.reload(wait_until="domcontentloaded", timeout=60_000)
+             self._pause(1.5, 3.0)
+             self._handle_cloudflare()
++        self.log(
++            f"线程{self.worker_number} DevTools 导航：HTTP={getattr(response, 'status', '')} "
++            f"title={title[:100]} html_chars={len(self.page.content())} url={self.page.url}"
++        )
++        if not self._captured_success and "mylife.com" in self.page.url:
++            self.capture_diagnostic("first-success", include_html=False)
++            self._captured_success = True
+         self._human_scroll()
+
+     def clear_person_data(self) -> None:
+@@ -298,13 +356,64 @@ class BrowserSession:
+             self._pause(0.8, 1.8)
+         return all_results
+
+-    def _collect_profile(self, result: SearchResult, index: int, strategy: str) -> ProfileResult:
++    def _close_visible_overlay(self) -> bool:
++        """关闭详情页可见弹层的 X；找不到时保持页面不变。"""
++        if not self.page:
++            return False
++        selectors = (
++            "[role='dialog'] button[aria-label*='close' i]",
++            "[role='dialog'] [class*='close' i]",
++            ".modal button[aria-label*='close' i]",
++            ".modal [class*='close' i]",
++            ".popup button[aria-label*='close' i]",
++            ".popup [class*='close' i]",
++            "button[aria-label='Close']",
++            "button:has-text('×')",
++        )
++        for selector in selectors:
++            try:
++                locator = self.page.locator(selector).first
++                if locator.count() and locator.is_visible(timeout=500):
++                    locator.click(timeout=2_000)
++                    self.log(f"线程{self.worker_number} 已点击详情页弹层 X")
++                    self._pause(0.2, 0.5)
++                    return True
++            except Exception:
++                continue
++        return False
++
++    def _return_to_search_list(self, search_url: str) -> None:
++        """按用户指定动作：关闭详情弹层，再后退一步回搜索列表。"""
++        self._close_visible_overlay()
++        try:
++            self.page.go_back(wait_until="commit", timeout=60_000)
++            self._pause(0.5, 1.2)
++            self._handle_cloudflare()
++        except Exception as exc:
++            self.log(f"线程{self.worker_number} 后退搜索列表首次失败，准备直达兜底：{type(exc).__name__}: {exc}")
++            try:
++                self.page.wait_for_timeout(1_200)
++            except Exception:
++                pass
++        if "pub-multisearch.pubview" not in str(self.page.url or ""):
++            try:
++                self.page.goto("about:blank", wait_until="commit", timeout=15_000)
++                self._navigate(search_url)
++            except Exception as exc:
++                # 详情数据已经取得，返回列表失败不应把完整候选误判为采集失败；下一候选仍可直达 URL。
++                self.log(f"线程{self.worker_number} 搜索列表直达兜底失败，保留已采集详情：{type(exc).__name__}: {exc}")
++                self.capture_diagnostic("return-search-failure")
++        if "pub-multisearch.pubview" in str(self.page.url or ""):
++            self.log(f"线程{self.worker_number} 已后退一步回到搜索列表页面")
++
++    def _collect_profile(self, result: SearchResult, index: int, strategy: str, search_url: str) -> ProfileResult:
+         self._navigate(result.profile_url)
+         parsed = parse_profile_html(self.page.content(), result, index, strategy)
+         self.log(
+             f"线程{self.worker_number} 已采集第 {index} 个详情，"
+             f"生日={'已提取' if parsed.birthday else '页面未公开'}"
+         )
++        self._return_to_search_list(search_url)
+         return parsed
+
+     def process(self, person: PersonInput) -> list[ProfileResult]:
+@@ -320,18 +429,20 @@ class BrowserSession:
+                     message=person.validation_error,
+                 )
+             ]
+-        strategies: list[tuple[str, str]] = []
+-        if person.location:
+-            strategies.append(("姓名+城市州邮编", build_search_url(person.first_name, person.last_name, person.location)))
+-        strategies.append(("姓名", build_search_url(person.first_name, person.last_name)))
++        location_strategy = ("姓名+城市州邮编", build_search_url(person.first_name, person.last_name, person.location))
++        name_strategy = ("姓名", build_search_url(person.first_name, person.last_name))
+         search_results: list[SearchResult] = []
+         strategy_used = ""
++        strategies = [location_strategy, name_strategy] if person.location else [name_strategy]
+         for strategy, url in strategies:
+             self.log(f"线程{self.worker_number} 开始{strategy}搜索")
+             search_results = self._collect_search_results(url)
+             if search_results:
+                 strategy_used = strategy
+                 break
++            if strategy == "姓名+城市州邮编":
++                self.log(f"线程{self.worker_number} 姓名+城市州邮编无结果，按规则回退姓名搜索")
++        strategy_used = strategy_used or ("姓名+城市州邮编→姓名" if person.location else "姓名")
+         if not search_results:
+             return [
+                 ProfileResult(
+@@ -344,26 +455,24 @@ class BrowserSession:
+                     message="两级搜索均无可采集结果" if person.location else "姓名搜索无可采集结果",
+                 )
+             ]
++        self.log(
++            f"线程{self.worker_number} 开始采集全部候选详情：候选={len(search_results)}，输入年龄={person.age or '空'}"
++        )
++        search_list_url = str(self.page.url or strategies[-1][1])
+         details: list[ProfileResult] = []
+         for index, search_result in enumerate(search_results, 1):
+             self._check_cancelled()
+             try:
+-                details.append(self._collect_profile(search_result, index, strategy_used))
++                details.append(self._collect_profile(search_result, index, strategy_used, search_list_url))
+             except CloudflareFailure:
+                 raise
+             except Exception as exc:
+-                details.append(
+-                    ProfileResult(
+-                        result_index=index,
+-                        profile_url=search_result.profile_url,
+-                        full_name=search_result.full_name,
+-                        age=search_result.age,
+-                        location=search_result.location,
+-                        former_names=search_result.former_names,
+-                        result_summary=search_result.result_summary,
+-                        query_strategy=strategy_used,
+-                        status="详情失败",
+-                        message=f"{type(exc).__name__}: {exc}",
+-                    )
+-                )
+-        return details
++                self.capture_diagnostic("detail-failure")
++                raise RuntimeError(f"详情页采集失败 {search_result.profile_url}: {type(exc).__name__}: {exc}") from exc
++        selected = select_best_birthday(person, details, len(search_results))
++        self.log(
++            f"线程{self.worker_number} 匹配完成：候选={len(details)}，"
++            f"选中年龄={selected.age or '空'}，生日={'已提取' if selected.birthday else '未公开'}；"
++            f"{selected.message}"
++        )
++        return [selected]
+diff --git a/controller.py b/controller.py
+index 1b86d2b..ca010b5 100644
+--- a/controller.py
++++ b/controller.py
+@@ -16,12 +16,27 @@ from input_loader import load_people
+ from models import PersonInput, RunConfig
+ from output_writer import RealtimeCsvWriter
+ from proxy_pool import ProxyGeo, ProxyPool, ProxySpec, parse_proxy_line
++from runtime_monitor import RuntimeHealthMonitor
+ from source_rewriter import remove_completed_rows
+
+ LogFn = Callable[[str], None]
+ ProgressFn = Callable[[dict[str, int | str]], None]
+
+
++def _is_proxy_network_error(message: str) -> bool:
++    upper = str(message or "").upper()
++    return any(
++        marker in upper
++        for marker in (
++            "ERR_SOCKS_CONNECTION_FAILED",
++            "ERR_PROXY_CONNECTION_FAILED",
++            "ERR_TUNNEL_CONNECTION_FAILED",
++            "SOCKS SERVER GENERAL FAILURE",
++            "CONNECTION RESET BY PEER",
++        )
 +    )
-+    if process.returncode:
-+        raise SystemExit(process.stderr.decode(errors="replace"))
-+    return process.stdout
 +
-+changed = [
-+    item.decode("utf-8")
-+    for item in git_bytes("diff", "--name-only", "-z", f"{base_commit}..HEAD").split(b"\0")
-+    if item and item.decode("utf-8") != "ROLLBACK.sh"
-+]
-+base_files = {
-+    item.decode("utf-8")
-+    for item in git_bytes("ls-tree", "-r", "--name-only", "-z", base_commit).split(b"\0")
-+    if item
- }
--directories = ["tests", "verification", ".pytest_cache", "__pycache__", ".git"]
--for name in files:
--    path = root / name
--    if path.is_file() or path.is_symlink():
-+for relative in changed:
-+    path = root / relative
-+    if relative in base_files:
-+        data = git_bytes("show", f"{base_commit}:{relative}")
-+        temporary = path.with_name(path.name + ".rollback_tmp")
-+        temporary.parent.mkdir(parents=True, exist_ok=True)
-+        temporary.write_bytes(data)
-+        os.replace(temporary, path)
-+    elif path.is_file() or path.is_symlink():
-         path.unlink()
--for name in directories:
--    path = root / name
--    if path.is_dir():
--        def remove_readonly(function, target, _error):
--            os.chmod(target, stat.S_IWRITE)
--            function(target)
--        shutil.rmtree(path, onexc=remove_readonly)
--print("ROLLBACK_OK originals=4 restored_behavior=baseline_no_tests")
 +
-+restored = hashlib.sha256((root / launcher).read_bytes()).hexdigest().upper()
-+if restored != expected_original:
-+    raise SystemExit(f"ROLLBACK_ABORT restored hash mismatch: {restored}")
-+print(
-+    f"ROLLBACK_OK base={base_commit[:7]} files={len(changed)} "
-+    "launcher_sha256=64837F9A1477162492D59D571839DC17C9C1D7264C3A4B10DCBC2D1C70FB1352 "
-+    "restored_behavior=lf_only_v1.0.0"
+ class AppController:
+     def __init__(self, config: RunConfig, log: LogFn | None = None, progress: ProgressFn | None = None) -> None:
+         self.config = config
+@@ -38,6 +53,10 @@ class AppController:
+         self._completed = 0
+         self._total = 0
+         self.output_path: Path | None = None
++        self.monitor: RuntimeHealthMonitor | None = None
++        self._finished_clean = False
++        self.diagnostics_dir = self.runtime_dir / "diagnostics" / self.log_path.stem
++        self._final_status = "未开始"
+
+     def _log(self, message: str) -> None:
+         clean = str(message).replace("\r", " ").strip()
+@@ -58,6 +77,12 @@ class AppController:
+             "pending": summary.get("pending", 0) + summary.get("retry", 0) + summary.get("running", 0),
+             "output": str(self.output_path or ""),
+         }
++        if self.monitor:
++            csv_audit = dict(self.monitor.snapshot().get("csv", {}))
++            payload["output_rows"] = int(csv_audit.get("rows", 0))
++            payload["birthdays"] = int(csv_audit.get("birthdays", 0))
++            payload["genders"] = int(csv_audit.get("genders", 0))
++            payload["zodiacs"] = int(csv_audit.get("zodiacs", 0))
+         self.progress(payload)
+
+     def start_async(self) -> None:
+@@ -106,6 +131,21 @@ class AppController:
+                 except OSError:
+                     pass
+
++    def _write_run_summary(self) -> None:
++        payload = {
++            "finished_at": datetime.now().astimezone().isoformat(timespec="seconds"),
++            "status": self._final_status,
++            "input_file": str(self.config.input_file),
++            "output_file": str(self.output_path or ""),
++            "total": self._total,
++            "monitor": self.monitor.snapshot() if self.monitor else {},
++        }
++        target = self.log_path.with_name(self.log_path.stem + "_summary.json")
++        temporary = target.with_suffix(".json.tmp")
++        target.parent.mkdir(parents=True, exist_ok=True)
++        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
++        os.replace(temporary, target)
++
+     def _worker(
+         self,
+         worker_number: int,
+@@ -133,6 +173,7 @@ class AppController:
+                 stop_event=self.stop_event,
+                 log=self._log,
+                 max_search_pages=self.config.max_search_pages,
++                diagnostics_dir=self.diagnostics_dir,
+             )
+             while not self.stop_event.is_set():
+                 try:
+@@ -154,6 +195,8 @@ class AppController:
+                     writer.put("retry", job_id, "用户停止")
+                     break
+                 except CloudflareFailure as exc:
++                    if session:
++                        session.capture_diagnostic("cloudflare-failure")
+                     challenge_streak += 1
+                     next_attempt = attempts + 1
+                     self._log(f"线程{worker_number} Cloudflare 连续失败 {challenge_streak} 次")
+@@ -174,11 +217,18 @@ class AppController:
+                     next_attempt = attempts + 1
+                     message = f"{type(exc).__name__}: {exc}"
+                     self._log(f"线程{worker_number} 第 {person.source_row} 行处理错误：{message}")
++                    if session:
++                        session.capture_diagnostic("job-error")
+                     if next_attempt < self.config.max_job_attempts and not self.stop_event.is_set():
+                         writer.put("retry", job_id, message)
+                         job_queue.put((job_id, person, next_attempt))
+                         if session:
+-                            session.rebuild()
++                            if proxy_spec and proxy_pool and _is_proxy_network_error(message):
++                                self._log(f"线程{worker_number} 检测到代理通道错误，刷新出口后重建浏览器")
++                                refreshed_geo = proxy_pool.refresh_after_challenge(proxy_spec, self.stop_event)
++                                session.rebuild(refreshed_geo)
++                            else:
++                                session.rebuild()
+                     else:
+                         writer.put("failed", job_id, message)
+                 finally:
+@@ -201,6 +251,13 @@ class AppController:
+             self._log(f"导入识别 {len(people)} 行，新增数据库任务 {inserted} 条，待处理 {len(jobs)} 条")
+             csv_writer = RealtimeCsvWriter(self.config.output_dir, self.config.input_file, headers)
+             self.output_path = csv_writer.path
++            restored = sum(
++                1
++                for original, result, created_at in self.database.existing_results(self.config.input_file)
++                if csv_writer.append(original, result, created_at, restoring=True)
++            )
++            if restored:
++                self._log(f"从 SQLite 断点恢复实时 CSV：补写 {restored} 行")
+             writer = DatabaseWriter(self.database, csv_writer, self._log)
+             writer.start()
+             job_queue: queue.Queue[tuple[int, PersonInput, int]] = queue.Queue()
+@@ -218,31 +275,63 @@ class AppController:
+                 )
+                 self.worker_threads.append(thread)
+                 thread.start()
++            self.monitor = RuntimeHealthMonitor(
++                self.database,
++                self.config.input_file,
++                csv_writer.path,
++                self.runtime_dir,
++                self.log_path,
++                lambda: list(self.worker_threads),
++            )
++            self.monitor.start()
+             for thread in self.worker_threads:
+                 thread.join()
++            if self.monitor:
++                self.monitor.stop()
+             writer.flush()
+             if self.stop_event.is_set():
+                 self._log("任务已停止；未执行输入文件重建，已保留数据库断点")
+                 self._emit_progress("已停止")
++                self._final_status = "已停止"
+             else:
+                 summary = self.database.summary(self.config.input_file)
+                 unfinished = summary.get("pending", 0) + summary.get("retry", 0) + summary.get("running", 0)
+                 if unfinished:
+                     self._log(f"仍有 {unfinished} 条任务未被可用浏览器领取；未重建输入文件")
+                     self._emit_progress("失败")
++                    self._final_status = "失败"
+                 else:
+-                    completed = csv_writer.first_column_values()
+-                    removed = remove_completed_rows(self.config.input_file, completed)
+-                    self._log(f"全部处理线程结束，已一次性重建输入文件并删除 {removed} 行明确结果")
+-                    self._emit_progress("已完成" if not summary.get("failed", 0) else "失败")
++                    completed_rows = self.database.done_source_rows(self.config.input_file)
++                    removed = remove_completed_rows(self.config.input_file, completed_rows)
++                    failed = summary.get("failed", 0)
++                    self._finished_clean = failed == 0
++                    self._final_status = "已完成" if self._finished_clean else "失败"
++                    self._emit_progress(self._final_status)
++                    purged = self.database.delete_source(self.config.input_file)
++                    self._log(
++                        f"全部处理线程结束，已按源行号一次性重建输入文件并删除 {removed} 行明确结果；"
++                        f"清理断点任务 {purged} 条；失败保留 {failed} 行"
++                    )
+         except Exception as exc:
+             self._log(f"任务终止：{type(exc).__name__}: {exc}")
+             self._emit_progress("失败")
++            self._final_status = "失败"
+         finally:
++            if self.monitor:
++                try:
++                    self.monitor.stop()
++                except Exception:
++                    pass
+             if writer:
+                 try:
+                     writer.close()
+                 except Exception as exc:
+                     self._log(f"关闭数据库写入线程失败：{type(exc).__name__}: {exc}")
++            try:
++                self._write_run_summary()
++            except Exception as exc:
++                self._log(f"写入运行汇总失败：{type(exc).__name__}: {exc}")
+             self._cleanup_cache()
++            if self._finished_clean:
++                shutil.rmtree(self.runtime_dir, ignore_errors=True)
+             self.worker_threads.clear()
+diff --git a/database.py b/database.py
+index be93fbc..f8e6fba 100644
+--- a/database.py
++++ b/database.py
+@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS jobs (
+     city TEXT,
+     state TEXT,
+     zip_code TEXT,
++    age TEXT,
+     validation_error TEXT,
+     status TEXT NOT NULL DEFAULT 'pending',
+     attempts INTEGER NOT NULL DEFAULT 0,
+@@ -62,6 +63,9 @@ class JobDatabase:
+         self.path.parent.mkdir(parents=True, exist_ok=True)
+         with closing(self.connect()) as connection, connection:
+             connection.executescript(SCHEMA)
++            columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(jobs)")}
++            if "age" not in columns:
++                connection.execute("ALTER TABLE jobs ADD COLUMN age TEXT")
+
+     def connect(self) -> sqlite3.Connection:
+         connection = sqlite3.connect(self.path, timeout=30)
+@@ -79,9 +83,9 @@ class JobDatabase:
+                     """
+                     INSERT OR IGNORE INTO jobs (
+                         source_path, source_row, first_value, headers_json, original_json,
+-                        first_name, middle_name, last_name, city, state, zip_code,
++                        first_name, middle_name, last_name, city, state, zip_code, age,
+                         validation_error, created_at, updated_at
+-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
++                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     """,
+                     (
+                         str(person.source_path), person.source_row, person.first_value,
+@@ -89,6 +93,7 @@ class JobDatabase:
+                         json.dumps(person.original, ensure_ascii=False),
+                         person.first_name, person.middle_name, person.last_name,
+                         person.city, person.state, person.zip_code,
++                        person.age,
+                         person.validation_error, now, now,
+                     ),
+                 )
+@@ -127,6 +132,7 @@ class JobDatabase:
+                         city=row["city"] or "",
+                         state=row["state"] or "",
+                         zip_code=row["zip_code"] or "",
++                        age=row["age"] or "",
+                         validation_error=row["validation_error"] or "",
+                     ),
+                     int(row["attempts"]),
+@@ -142,6 +148,40 @@ class JobDatabase:
+             ).fetchall()
+         return {str(row["status"]): int(row["count"]) for row in rows}
+
++    def existing_results(self, source_path: Path) -> list[tuple[dict[str, str], dict[str, Any], str]]:
++        with closing(self.connect()) as connection, connection:
++            rows = connection.execute(
++                """
++                SELECT j.original_json, r.result_json, r.created_at
++                FROM results AS r
++                JOIN jobs AS j ON j.id=r.job_id
++                WHERE j.source_path=?
++                ORDER BY j.source_row, r.result_index, r.id
++                """,
++                (str(source_path.resolve()),),
++            ).fetchall()
++        return [
++            (json.loads(row["original_json"]), json.loads(row["result_json"]), str(row["created_at"]))
++            for row in rows
++        ]
++
++    def done_source_rows(self, source_path: Path) -> set[int]:
++        with closing(self.connect()) as connection, connection:
++            rows = connection.execute(
++                "SELECT source_row FROM jobs WHERE source_path=? AND status='done'",
++                (str(source_path.resolve()),),
++            ).fetchall()
++        return {int(row["source_row"]) for row in rows}
++
++    def delete_source(self, source_path: Path) -> int:
++        with closing(self.connect()) as connection, connection:
++            cursor = connection.execute(
++                "DELETE FROM jobs WHERE source_path=?",
++                (str(source_path.resolve()),),
++            )
++            connection.commit()
++        return int(cursor.rowcount)
++
+
+ class DatabaseWriter(threading.Thread):
+     def __init__(self, database: JobDatabase, csv_writer: RealtimeCsvWriter, log: Callable[[str], None]) -> None:
+diff --git a/gui.py b/gui.py
+index 0f625df..b2880f2 100644
+--- a/gui.py
++++ b/gui.py
+@@ -195,7 +195,9 @@ class MainWindow:
+             self.status_var.set(status)
+             self.count_var.set(
+                 f"总数 {state.get('total', 0)}｜完成 {state.get('completed', 0)}｜"
+-                f"待处理 {state.get('pending', 0)}｜失败 {state.get('failed', 0)}"
++                f"待处理 {state.get('pending', 0)}｜失败 {state.get('failed', 0)}｜"
++                f"CSV {state.get('output_rows', 0)}｜生日 {state.get('birthdays', 0)}｜"
++                f"性别 {state.get('genders', 0)}｜星座 {state.get('zodiacs', 0)}"
+             )
+             output = str(state.get("output", ""))
+             self.output_status_var.set(f"实时 CSV：{output}" if output else "")
+@@ -239,7 +241,9 @@ class MainWindow:
+             self.root.destroy()
+
+
+-def run_gui() -> None:
++def run_gui(auto_start: bool = False) -> None:
+     root = tk.Tk()
+-    MainWindow(root)
++    window = MainWindow(root)
++    if auto_start:
++        root.after(900, window.start)
+     root.mainloop()
+diff --git a/identity_matcher.py b/identity_matcher.py
+new file mode 100644
+index 0000000..fe1289c
+--- /dev/null
++++ b/identity_matcher.py
+@@ -0,0 +1,429 @@
++from __future__ import annotations
++
++import re
++from dataclasses import dataclass
++from datetime import date, datetime
++from difflib import SequenceMatcher
++
++from models import PersonInput, ProfileResult
++
++
++PHONE_KEYS = {
++    "phone",
++    "phones",
++    "phonenumber",
++    "phonenumbers",
++    "primaryphone",
++    "mobile",
++    "telephone",
++    "电话",
++    "手机号",
++    "手机号码",
++}
++EMAIL_KEYS = {"email", "emails", "emailaddress", "emailaddresses", "邮箱", "电子邮箱"}
++CURRENT_ADDRESS_KEYS = {
++    "address",
++    "currentaddress",
++    "primaryaddress",
++    "location",
++    "地址",
++    "当前地址",
++    "现地址",
++}
++PAST_ADDRESS_KEYS = {
++    "pastaddress",
++    "pastaddresses",
++    "previousaddress",
++    "previousaddresses",
++    "formeraddress",
++    "曾用地址",
++    "曾经地址",
++    "历史地址",
++}
++FORMER_NAME_KEYS = {
++    "formername",
++    "formernames",
++    "alias",
++    "aliases",
++    "othernames",
++    "曾用名",
++    "别名",
++}
++RELATIVE_KEYS = {"possiblerelative", "possiblerelatives", "relatives", "亲属", "可能亲属"}
++ASSOCIATE_KEYS = {"possibleassociate", "possibleassociates", "associates", "关联人", "可能关联人"}
++
++PHONE_RE = re.compile(r"(?<!\d)(?:\+?1[\s.()-]*)?(\d{3})[\s.()-]*(\d{3})[\s.-]*(\d{4})(?!\d)")
++EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
++ZIP_RE = re.compile(r"\b(\d{5})(?:-\d{4})?\b")
++STREET_RE = re.compile(
++    r"\b(\d{1,6})\s+([A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+){0,5}?)\s+"
++    r"(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd|Court|Ct|"
++    r"Circle|Cir|Way|Parkway|Pkwy|Place|Pl|Terrace|Ter|Trail|Trl)\b",
++    re.I,
 +)
- PY
-diff --git a/VERIFICATION.txt b/VERIFICATION.txt
-index 0d41f9d..97a052c 100644
---- a/VERIFICATION.txt
-+++ b/VERIFICATION.txt
-@@ -1,5 +1,5 @@
- CHANGED_BRANCH: main
--CHANGED_FIELDS: modular_gui+sqlite_wal+single_db_writer+adaptive_input+realtime_utf8_bom_csv+authenticated_socks_bridge+patchright_headful_hidden+continuous_turnstile_poll+proxy_geo+atomic_input_rebuild
-+CHANGED_FIELDS: launcher_crlf_bytes+git_cmd_no_text_normalization+quoted_environment_assignment+preserved_exit_code
- 
- ARTIFACT_PATHS:
- MODIFIED_FILE: C:\Users\zhang\Desktop\mylife\MODIFIED_FILE
-@@ -7,25 +7,47 @@ DIFF_FILE: C:\Users\zhang\Desktop\mylife\DIFF_FILE
- VERIFICATION: C:\Users\zhang\Desktop\mylife\VERIFICATION.txt
- ROLLBACK: C:\Users\zhang\Desktop\mylife\ROLLBACK.sh
- 
--ORIGINAL_SHA256:
--BEA2D6F251594CABDF5748FC24A188D18DF1DA9E8AB93D5394D4F1637B046654 *turnstile_harvester.py
--9D00BD8F72DBD0CFF6E7AD380F62CAD31397C45F32B2D9C4C03121325158EC36 *测试文件1.xlsx
--7F74F23E2B56656D468EDBE620E46FF12342D3007DBDF5E51514E41604772DC9 *测试文件2.csv
--8588065E7D5F193A614CF1439417EF7CFB15C5450702F0A7BE86052B5918D94A *设计思路.txt
-+ORIGINAL_V1.0.0_LAUNCHER:
-+PATH: C:\Users\zhang\Desktop\mylife\启动MyLife正式版.cmd
-+SHA256: 64837F9A1477162492D59D571839DC17C9C1D7264C3A4B10DCBC2D1C70FB1352
-+BYTES: 283
-+LINE_ENDINGS: CRLF=0 LF=16 LONE_LF=16 BOM=False
- 
- BASELINE:
--COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; python -B -m unittest discover -s 'C:\Users\zhang\Desktop\mylife' -p 'test*.py'
--INPUT: 原始目录，仅有 turnstile_harvester.py、测试文件1.xlsx、测试文件2.csv、设计思路.txt。
-+COMMAND: cmd.exe /d /c 'echo.| call "C:\Users\zhang\Desktop\mylife\启动MyLife正式版.cmd"'
-+INPUT: v1.0.0 正式目录中的纯 LF 启动器；向 pause 输入一个换行。
- LITERAL_OUTPUT:
------------------------------------------------------------------------
--Ran 0 tests in 0.000s
-+Press any key to continue . . .
-+'tlocal' is not recognized as an internal or external command,
-+operable program or batch file.
-+'PYTHONDONTWRITEBYTECODE' is not recognized as an internal or external command,
-+operable program or batch file.
-+'p.py' is not recognized as an internal or external command,
-+operable program or batch file.
-+'to' is not recognized as an internal or external command,
-+operable program or batch file.
-+'�动失败，错误码：9009' is not recognized as an internal or external command,
-+operable program or batch file.
-+RESULT: exit status 1；cmd.exe 将纯 LF 批处理错位解析，GUI 未启动。
 +
-+MODIFIED_LAUNCHER:
-+COMMAND: cmd.exe /d /c 'call "C:\Users\zhang\Desktop\codex_tmp\mylife_launcher_fix_20260811\启动MyLife正式版.cmd"'
-+INPUT: v1.0.1 CRLF 启动器；在临时副本中把 main.py 替换成只输出环境变量的探针，运行后立即按原 SHA256 恢复 main.py。
-+LITERAL_OUTPUT:
-+依赖检查通过，已安装项全部跳过。
-+MAIN_PROBE_OK 1
-+LAUNCHER_PARSE_EXIT=0
-+RESULT: exit status 0；bootstrap.py 和 main.py 两条命令均被完整执行，PYTHONDONTWRITEBYTECODE=1。
- 
--NO TESTS RAN
--RESULT: exit status 5
-+LINE_ENDING_TEST:
-+COMMAND: python -B -（读取启动器原始字节并统计换行）
-+INPUT: v1.0.1 启动器。
-+LITERAL_OUTPUT: LINE_ENDINGS CRLF=19 LF=19 LONE_LF=0 BOM=False
-+RESULT: exit status 0；SHA256=C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF。
- 
- MODIFIED:
--COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; python -B -m unittest discover -s tests -v
--INPUT: 正式模块源码与 tests 中 18 个离线单元/集成测试。
-+COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; py -3 -B -m unittest discover -s tests -v
-+INPUT: 未修改的 Python 功能模块与既有 tests 中 18 个测试。
- LITERAL_OUTPUT:
- test_late_widget_poll_click_and_pass (test_cloudflare_handler.CloudflareHandlerTests.test_late_widget_poll_click_and_pass) ... ok
- test_full_pipeline_realtime_output_then_single_rebuild (test_controller_offline.ControllerOfflineTests.test_full_pipeline_realtime_output_then_single_rebuild) ... ok
-@@ -47,103 +69,45 @@ test_xlsx_rebuild_preserves_unprocessed_rows (test_source_rewriter.SourceRewrite
- test_existing_module_token_and_detection (test_turnstile_harvester.TurnstileHarvesterTests.test_existing_module_token_and_detection) ... ok
- 
- ----------------------------------------------------------------------
--Ran 18 tests in 1.835s
-+Ran 18 tests in 1.853s
- 
- OK
- RESULT: exit status 0
- 
-+RELEASE_ARCHIVE_TEST:
-+COMMAND: git archive --format=zip HEAD；随后用 Python zipfile 读取 `启动MyLife正式版.cmd` 原始字节。
-+INPUT: v1.0.1 源码提交；后续仅修订验证文档，启动器字节不变。
-+LITERAL_OUTPUT:
-+COMMIT_LAUNCHER SHA256=C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF CRLF=19 LF=19 LONE_LF=0
-+ARCHIVE_LAUNCHER SHA256=C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF CRLF=19 LF=19 LONE_LF=0
-+RESULT: exit status 0；Git 提交和 ZIP 内启动器字节完全相同。
 +
- SELF_CHECK:
--COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; python -B main.py --check
--INPUT: 正式源码、当前 Python 3.12.10 环境。
-+COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; py -3 -B main.py --check
-+INPUT: v1.0.1 源码和当前 Python 环境。
- LITERAL_OUTPUT:
- 依赖检查通过，已安装项全部跳过。
- SELF_CHECK_OK
- RESULT: exit status 0
- 
--GUI_SMOKE:
--COMMAND: python -B -（创建隐藏 Tk 根窗口、构造 MainWindow、update_idletasks、销毁）
--INPUT: 设计思路.txt 中动态代理行。
--LITERAL_OUTPUT: GUI_SMOKE_OK 11 小窗口 1
--RESULT: exit status 0；GUI 控件、代理动态加载、小窗口默认值和线程默认值有效。
--
--INPUT_AUDIT:
--COMMAND: python -B -（load_people 只读审计两个测试文件）
--INPUT: 测试文件1.xlsx、测试文件2.csv。
--LITERAL_OUTPUT:
--测试文件1.xlsx ROWS 6552 VALID 3591 INVALID 2961 WITH_LOCATION 3586 DISTINCT_NAMES 3499
--测试文件2.csv ROWS 202 VALID 137 INVALID 65 WITH_LOCATION 137 DISTINCT_NAMES 132
--RESULT: exit status 0；任意列顺序和上游结果列可被识别，原文件未改。
--
--PROXY_CONNECTIVITY:
--COMMAND: python -B -（ThreadPoolExecutor 并行执行 ProxyPool.check）
--INPUT: 设计思路.txt 中 11 套去重代理。
--LITERAL_OUTPUT: PROXY_COUNT 11；PROXY_1..PROXY_11 均 OK；READY 11。
--RESULT: exit status 0；11/11 出口 IP 与 America/New_York 时区均确认。
--
--PATCHRIGHT_PROXY_BRIDGE:
--COMMAND: python -B -（BrowserSession 无头代理访问 https://api.ipify.org）
--INPUT: 含 # 字符密码的代理、本地认证 SOCKS5 桥、Patchright Chrome。
--LITERAL_OUTPUT: PATCHRIGHT_PROXY 200 IP_LEN 13 TZ America/New_York
--RESULT: exit status 0；Chromium 经本地桥绑定远端认证 SOCKS5，时区随 IP。
--
--REFERENCE_READ_ONLY:
--INPUT: E:\truepeoplesearch 与 E:\txfgsales，只读参考 Cloudflare/Patchright 已验证实现。
--LITERAL_RESULT:
--E:\truepeoplesearch\truepeoplesearch_step16.py SHA256=59702A21075A19670BF411A17A1FB5B46646465EE09559257D02B07A09713B97
--E:\txfgsales\browser_manager.py SHA256=0267ED738EDC8FA53BBC862B87510A233BB0B823D9C2BA24B5638598FD987840
--E:\txfgsales\processor.py SHA256=457873316E4DC731CC7327729DBEC84AF29CC3420F335165FF64804887FE2E57
--RESULT: 三个参考文件未写入；正式源码采用持续 450ms 控件轮询、headful-hidden、延后 geolocation 与本地网络访问检查兼容策略。
--
--LIVE_CLOUDFLARE_SEARCH:
--COMMAND: python -B -（Patchright 小窗口、代理、MyLife 姓名+城市州邮编真实搜索）
--INPUT: 一条设计样例姓名/城市/州/邮编、代理池中已通过检查的固定代理。
--LITERAL_OUTPUT:
--Cloudflare 第 9 次检查已真实点击控件：方式=challenge-frame-element-coordinate，选择器=frame.frame_element()，累计=1
--Cloudflare 第 11 次检查已真实点击控件：方式=challenge-frame-element-coordinate，选择器=frame.frame_element()，累计=2
--Cloudflare 第 13 次检查已真实点击控件：方式=frame-control-mouse，选择器=input[type='checkbox']，累计=3
--Cloudflare 已放行：检查 16 次，真实点击 4 次
--CF_REFERENCE_PROBE=PASS RESULTS 1 NO_RESULTS False TITLE Get Reputation Report details, Phone, Address & more.
--RESULT: exit status 0；Cloudflare 真实放行并提取 1 条搜索结果。
--
--LIVE_FULL_PIPELINE:
--COMMAND: python -B -（AppController 单记录完整实跑）
--INPUT: 一条设计样例、1 线程、小窗口、固定代理、SQLite WAL、实时 CSV。
--LITERAL_OUTPUT:
--线程1 搜索结果第 1 页：1 条
--线程1 已采集第 1 个详情，生日=页面未公开
--线程1 完成输入第 2 行，输出 1 条
--全部处理线程结束，已一次性重建输入文件并删除 1 行明确结果
--LIVE_FULL_SUMMARY {'done': 1}
--LIVE_FULL_ROWS 1 STATUSES ['已提取详情'] BIRTHDAYS 0 PROFILE_URLS 1
--LIVE_FULL_INPUT_LINES 1
--RESULT: exit status 0；搜索、逐详情访问、实时 CSV、SQLite done、输入批次重建全部完成；该详情页的 Date of Birth 区域为 Public/Private 占位且未公开具体生日，结果明确记录“详情页未公开生日”。
--
--LIVE_HIDDEN_MODE:
--COMMAND: python -B -（Patchright“无头”真实搜索）
--INPUT: 同一 MyLife 搜索、Win32 隐藏本会话新增 Chrome 窗口。
--LITERAL_OUTPUT: HIDDEN_PATCHRIGHT=PASS HIDDEN_HANDLES 4 RESULTS 1 NO_RESULTS False
--RESULT: exit status 0；无头选项内部 headful-hidden，Managed Turnstile 可签发并返回结果。
--
- ROLLBACK:
--COMMAND: C:\Program Files\Git\bin\bash.exe ROLLBACK.sh C:\Users\zhang\Desktop\codex_tmp\mylife_rollback_copy3_20260811
--INPUT: 修改版完整副本；原始四文件与正式新增模块同时存在。
--LITERAL_OUTPUT: ROLLBACK_OK originals=4 restored_behavior=baseline_no_tests
-+COMMAND: C:\Program Files\Git\bin\bash.exe ROLLBACK.sh C:\Users\zhang\Desktop\codex_tmp\mylife_launcher_rollback_copy_20260811
-+INPUT: v1.0.1 修改版完整副本及其 Git 历史。
-+LITERAL_OUTPUT: ROLLBACK_OK base=9139968 files=8 launcher_sha256=64837F9A1477162492D59D571839DC17C9C1D7264C3A4B10DCBC2D1C70FB1352 restored_behavior=lf_only_v1.0.0
- RESULT: exit status 0
- 
- ROLLBACK_TEST:
--COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; python -B -m unittest discover -s 'C:\Users\zhang\Desktop\codex_tmp\mylife_rollback_copy3_20260811' -p 'test*.py'
-+COMMAND: python -B -（比较回滚副本工作树与 9139968、检查启动器 SHA256 和换行）
- INPUT: 已执行回滚的另一份副本。
- LITERAL_OUTPUT:
------------------------------------------------------------------------
--Ran 0 tests in 0.000s
--
--NO TESTS RAN
--RESULT: exit status 5（与 BASELINE 一致）
-+ROLLBACK_TREE_EXCEPT_SCRIPT_MATCH=True
-+ROLLBACK_LAUNCHER SHA256=64837F9A1477162492D59D571839DC17C9C1D7264C3A4B10DCBC2D1C70FB1352 CRLF=0 LF=16 LONE_LF=16
-+ROLLBACK_ADDED_FILES_PRESENT gitattributes=False release_notes=False
-+RESULT: exit status 0
- 
--ROLLBACK_HASH_RESULT:
--turnstile_harvester.py MATCH=True HASH=BEA2D6F251594CABDF5748FC24A188D18DF1DA9E8AB93D5394D4F1637B046654
--测试文件1.xlsx MATCH=True HASH=9D00BD8F72DBD0CFF6E7AD380F62CAD31397C45F32B2D9C4C03121325158EC36
--测试文件2.csv MATCH=True HASH=7F74F23E2B56656D468EDBE620E46FF12342D3007DBDF5E51514E41604772DC9
--设计思路.txt MATCH=True HASH=8588065E7D5F193A614CF1439417EF7CFB15C5450702F0A7BE86052B5918D94A
-+RESTORED_BEHAVIOR_STATUS: 回滚副本除正在执行且需保留的 ROLLBACK.sh 外，其余热修复文件与 v1.0.0 提交 9139968 完全匹配；启动器恢复原始 SHA256 和纯 LF 状态，重现 v1.0.0 的启动器行为；正式工作副本继续保留 CRLF 修复。
- 
--RESTORED_BEHAVIOR_STATUS: 回滚副本只剩四个原始文件，四个 SHA256 全部匹配，测试行为恢复为 BASELINE 的 0 tests / exit 5；正式工作副本继续保留修改版。
-+UNCHANGED_FILES:
-+设计思路.txt SHA256=8588065E7D5F193A614CF1439417EF7CFB15C5450702F0A7BE86052B5918D94A；未改动。
-+Python 功能模块 main.py、bootstrap.py、browser_worker.py、cloudflare_handler.py、controller.py、database.py、gui.py、input_loader.py、models.py、mylife_parser.py、output_writer.py、proxy_pool.py、socks_bridge.py、source_rewriter.py、turnstile_harvester.py 均未做功能修改；version.py 仅更新版本号。
-+E:\truepeoplesearch 与 E:\txfgsales 继续保持只读。
++@dataclass(slots=True)
++class CandidateScore:
++    detail: ProfileResult
++    score: int
++    strong_categories: int
++    exact_age: bool
++    evidence: list[str]
++    conflicts: list[str]
++
++
++def _key(value: object) -> str:
++    return re.sub(r"[\s_-]+", "", str(value or "").strip().lower())
++
++
++def _clean(value: object) -> str:
++    return re.sub(r"\s+", " ", str(value or "")).strip()
++
++
++def _compact(value: object) -> str:
++    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
++
++
++def _words(value: object) -> list[str]:
++    return re.findall(r"[a-z0-9]+", str(value or "").lower())
++
++
++def _values(person: PersonInput, keys: set[str]) -> list[str]:
++    found: list[str] = []
++    for header, value in person.original.items():
++        clean = _clean(value)
++        if clean and _key(header) in keys:
++            found.append(clean)
++    return found
++
++
++def _split_values(values: list[str]) -> list[str]:
++    result: list[str] = []
++    for value in values:
++        result.extend(part.strip() for part in re.split(r"[|\r\n;]+", value) if part.strip())
++    return result
++
++
++def _phones(texts: list[str]) -> set[str]:
++    found: set[str] = set()
++    for text in texts:
++        for match in PHONE_RE.finditer(text):
++            found.add("".join(match.groups()))
++    return found
++
++
++def _emails(texts: list[str]) -> set[str]:
++    return {match.group(0).lower() for text in texts for match in EMAIL_RE.finditer(text)}
++
++
++def _zips(texts: list[str]) -> set[str]:
++    return {match.group(1) for text in texts for match in ZIP_RE.finditer(text)}
++
++
++def _streets(texts: list[str]) -> list[tuple[str, str]]:
++    found: list[tuple[str, str]] = []
++    for text in texts:
++        for match in STREET_RE.finditer(text):
++            name_words = [
++                word
++                for word in _words(match.group(2))
++                if word not in {"north", "south", "east", "west", "n", "s", "e", "w"}
++            ]
++            if name_words:
++                found.append((match.group(1), name_words[0]))
++    return found
++
++
++def _age(value: object) -> int | None:
++    match = re.search(r"\b(\d{1,3})\b", str(value or ""))
++    if not match:
++        return None
++    number = int(match.group(1))
++    return number if 0 < number < 125 else None
++
++
++def _birthday_age(value: str) -> int | None:
++    raw = _clean(value)
++    for fmt in ("%m/%d/%Y", "%m-%d-%Y", "%B %d, %Y", "%b %d, %Y"):
++        try:
++            born = datetime.strptime(raw, fmt).date()
++            today = date.today()
++            return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
++        except ValueError:
++            continue
++    return None
++
++
++def _name_evidence(person: PersonInput, detail: ProfileResult) -> tuple[int, list[str], list[str], bool]:
++    input_names = [person.full_name, *_split_values(_values(person, FORMER_NAME_KEYS))]
++    candidate_names = [detail.full_name, *_split_values([detail.former_names])]
++    input_norm = {_compact(name) for name in input_names if _compact(name)}
++    candidate_norm = {_compact(name) for name in candidate_names if _compact(name)}
++    if input_norm & candidate_norm:
++        return 32, ["姓名完全一致"], [], True
++
++    expected_first = _compact(person.first_name)
++    expected_last = _compact(person.last_name)
++    candidate_words = _words(detail.full_name)
++    if expected_first and expected_last and expected_first in candidate_words and expected_last in candidate_words:
++        return 24, ["名和姓一致"], [], True
++
++    best_ratio = 0.0
++    for expected in input_norm:
++        for actual in candidate_norm:
++            best_ratio = max(best_ratio, SequenceMatcher(None, expected, actual).ratio())
++    if best_ratio >= 0.92:
++        return 20, ["姓名高度相似"], [], True
++    if best_ratio >= 0.82:
++        return 12, ["姓名相似"], [], True
++    if best_ratio >= 0.70:
++        return 6, ["姓名部分相似"], [], False
++    return -24, [], ["姓名明显不一致"], False
++
++
++def _location_text(detail: ProfileResult) -> str:
++    return " | ".join(
++        value
++        for value in (
++            detail.location,
++            detail.result_summary,
++            detail.profile_summary,
++            detail.former_names,
++        )
++        if value
++    )
++
++
++def score_candidate(person: PersonInput, detail: ProfileResult) -> CandidateScore:
++    score, evidence, conflicts, name_strong = _name_evidence(person, detail)
++    strong: set[str] = {"name"} if name_strong else set()
++    candidate_text = _location_text(detail)
++    candidate_compact = _compact(candidate_text)
++
++    input_phones = _phones(_values(person, PHONE_KEYS))
++    candidate_phones = _phones([candidate_text])
++    exact_phones = input_phones & candidate_phones
++    last7 = {phone[-7:] for phone in input_phones} & {phone[-7:] for phone in candidate_phones}
++    area_codes = {phone[:3] for phone in input_phones} & {phone[:3] for phone in candidate_phones}
++    if exact_phones:
++        score += 55
++        evidence.append("完整手机号一致")
++        strong.add("phone")
++    elif last7:
++        score += 35
++        evidence.append("手机号后7位一致")
++        strong.add("phone")
++    elif area_codes:
++        score += 4
++        evidence.append("手机号前三位区号一致（弱证据）")
++    elif input_phones and candidate_phones:
++        score -= 8
++        conflicts.append("公开手机号不一致")
++
++    input_emails = _emails(_values(person, EMAIL_KEYS))
++    candidate_emails = _emails([candidate_text])
++    if input_emails & candidate_emails:
++        score += 50
++        evidence.append("完整邮箱一致")
++        strong.add("email")
++    elif input_emails and candidate_emails:
++        score -= 6
++        conflicts.append("公开邮箱不一致")
++
++    current_addresses = _split_values(_values(person, CURRENT_ADDRESS_KEYS))
++    past_addresses = _split_values(_values(person, PAST_ADDRESS_KEYS))
++    exact_current = [
++        address
++        for address in current_addresses
++        if _streets([address]) and len(_compact(address)) >= 9 and _compact(address) in candidate_compact
++    ]
++    exact_past = [
++        address
++        for address in past_addresses
++        if _streets([address]) and len(_compact(address)) >= 9 and _compact(address) in candidate_compact
++    ]
++    if exact_current:
++        score += 45
++        evidence.append("完整当前地址一致")
++        strong.add("address")
++    elif exact_past:
++        score += 32
++        evidence.append("完整曾用地址一致")
++        strong.add("address")
++
++    current_zips = _zips(current_addresses)
++    if person.zip_code and re.fullmatch(r"\d{5}(?:-\d{4})?", person.zip_code.strip()):
++        current_zips.add(person.zip_code[:5])
++    past_zips = _zips(past_addresses)
++    candidate_zips = _zips([candidate_text])
++    if current_zips & candidate_zips:
++        score += 20
++        evidence.append("当前邮编一致")
++        strong.add("zip")
++    elif past_zips & candidate_zips:
++        score += 12
++        evidence.append("曾用地址邮编一致")
++        strong.add("zip")
++
++    candidate_streets = _streets([candidate_text])
++    current_streets = _streets(current_addresses)
++    past_streets = _streets(past_addresses)
++
++    def street_match(inputs: list[tuple[str, str]], prefix: bool = False) -> bool:
++        for input_number, input_name in inputs:
++            for candidate_number, candidate_name in candidate_streets:
++                number_match = (
++                    input_number[:2] == candidate_number[:2]
++                    if prefix and len(input_number) >= 2 and len(candidate_number) >= 2
++                    else input_number == candidate_number
++                )
++                if number_match and input_name == candidate_name:
++                    return True
++        return False
++
++    if street_match(current_streets):
++        score += 18
++        evidence.append("当前门牌号和街道一致")
++        strong.add("street")
++    elif street_match(past_streets):
++        score += 12
++        evidence.append("曾用门牌号和街道一致")
++        strong.add("street")
++    elif street_match(current_streets, prefix=True):
++        score += 7
++        evidence.append("当前地址门牌号前2位和街道一致")
++    elif street_match(past_streets, prefix=True):
++        score += 5
++        evidence.append("曾用地址门牌号前2位和街道一致")
++
++    city = _compact(person.city)
++    state = person.state.strip().lower()
++    city_match = bool(city and city in candidate_compact)
++    state_match = bool(state and re.search(rf"\b{re.escape(state)}\b", candidate_text, re.I))
++    if city_match and state_match:
++        score += 16
++        evidence.append("城市和州一致")
++        strong.add("city_state")
++    elif city_match:
++        score += 8
++        evidence.append("城市一致")
++    elif state_match:
++        score += 3
++        evidence.append("州一致（弱证据）")
++
++    relative_names = {
++        _compact(name)
++        for name in _split_values(_values(person, RELATIVE_KEYS))
++        if len(_compact(name)) >= 6
++    }
++    relative_hits = sum(1 for name in relative_names if name in candidate_compact)
++    if relative_hits:
++        score += min(16, relative_hits * 8)
++        evidence.append(f"共同亲属一致{relative_hits}人")
++        if relative_hits >= 2:
++            strong.add("relatives")
++
++    associate_names = {
++        _compact(name)
++        for name in _split_values(_values(person, ASSOCIATE_KEYS))
++        if len(_compact(name)) >= 6
++    }
++    associate_hits = sum(1 for name in associate_names if name in candidate_compact)
++    if associate_hits:
++        score += min(6, associate_hits * 3)
++        evidence.append(f"关联人一致{associate_hits}人（辅助证据）")
++
++    input_age = _age(person.age)
++    candidate_age = _age(detail.age)
++    exact_age = bool(input_age is not None and candidate_age == input_age)
++    if exact_age:
++        score += 30
++        evidence.append("年龄完全一致")
++        strong.add("age")
++    elif input_age is not None and candidate_age is not None:
++        difference = abs(input_age - candidate_age)
++        if difference == 1:
++            score += 8
++            evidence.append("年龄相差1岁")
++        elif difference <= 3:
++            score += 2
++            evidence.append("年龄接近")
++        else:
++            score -= 8
++            conflicts.append("年龄不一致")
++
++    birthday_age = _birthday_age(detail.birthday)
++    if candidate_age is not None and birthday_age is not None:
++        if abs(candidate_age - birthday_age) <= 1:
++            score += 3
++            evidence.append("生日与页面年龄自洽")
++        else:
++            score -= 8
++            conflicts.append("生日与页面年龄冲突")
++
++    return CandidateScore(
++        detail=detail,
++        score=score,
++        strong_categories=len(strong),
++        exact_age=exact_age,
++        evidence=evidence,
++        conflicts=conflicts,
++    )
++
++
++def _confidence(best: CandidateScore, runner_up: CandidateScore | None) -> str:
++    margin = best.score - runner_up.score if runner_up else best.score
++    strong = best.strong_categories
++    if best.score >= 85 and strong >= 3 and margin >= 8:
++        return "高"
++    if best.score >= 55 and strong >= 2 and margin >= 4:
++        return "中"
++    return "低"
++
++
++def select_best_identity(
++    person: PersonInput,
++    details: list[ProfileResult],
++    total_candidates: int,
++) -> ProfileResult:
++    """按年龄分层后，用多源身份信号选择唯一候选；生日只用于同分决胜。"""
++
++    if not details:
++        return ProfileResult(
++            result_index=0,
++            profile_url="",
++            full_name=person.full_name,
++            location=person.location,
++            query_strategy="年龄分层→多信号身份匹配",
++            status="无结果",
++            message="没有可用于匹配的候选",
++        )
++
++    scored = [score_candidate(person, detail) for detail in details]
++    exact_age = [item for item in scored if item.exact_age]
++    pool = exact_age or scored
++    ranked = sorted(
++        pool,
++        key=lambda item: (item.score, item.strong_categories, bool(item.detail.birthday), -item.detail.result_index),
++        reverse=True,
++    )
++    best = ranked[0]
++    runner_up = ranked[1] if len(ranked) > 1 else None
++    confidence = _confidence(best, runner_up)
++    margin = best.score - runner_up.score if runner_up else best.score
++    selected = best.detail
++    age_reason = (
++        f"先限定 {len(exact_age)} 个同龄候选"
++        if exact_age
++        else (f"没有年龄 {person.age} 的候选" if person.age else "输入未提供年龄")
++    )
++    evidence_text = "、".join(best.evidence[:8]) or "仅有弱匹配证据"
++    conflict_text = f"；冲突={'、'.join(best.conflicts[:4])}" if best.conflicts else ""
++    selected.status = f"已匹配生日（{confidence}置信度）" if selected.birthday else f"已匹配身份但生日未公开（{confidence}置信度）"
++    selected.message = (
++        f"{age_reason}；多信号得分={best.score}，领先={margin}，证据={evidence_text}{conflict_text}；"
++        f"总候选={total_candidates}"
++    )
++    selected.query_strategy = f"{selected.query_strategy}→年龄分层→姓名/手机号/当前与曾用地址综合匹配"
++    return selected
+diff --git a/input_loader.py b/input_loader.py
+index f21780f..3a1862d 100644
+--- a/input_loader.py
++++ b/input_loader.py
+@@ -17,7 +17,9 @@ ALIASES: dict[str, tuple[str, ...]] = {
+     "city": ("city", "城市", "town"),
+     "state": ("state", "州", "省", "province"),
+     "zip_code": ("zip", "zipcode", "zip_code", "zip code", "postalcode", "邮编"),
++    "age": ("age", "年龄", "年纪"),
+     "location": ("location", "address", "地址", "地区", "citystatezip"),
++    "current_address": ("currentaddress", "current_address", "current address", "当前地址", "现地址"),
+     "query": ("query", "search", "keyword", "关键词", "查询", "搜索资料"),
+ }
+
+@@ -142,6 +144,14 @@ def _looks_unsupported_query(value: str) -> bool:
+     return "@" in value or (compact.isdigit() and len(compact) >= 7)
+
+
++def _normalize_age(value: str) -> str:
++    match = re.fullmatch(r"\s*(\d{1,3})(?:\.0+)?\s*", value or "")
++    if not match:
++        return ""
++    age = int(match.group(1))
++    return str(age) if 0 < age < 125 else ""
++
++
+ def load_people(path: str | Path) -> tuple[list[str], list[PersonInput]]:
+     source = Path(path).resolve()
+     headers, raw_rows = read_rows(source)
+@@ -168,12 +178,15 @@ def load_people(path: str | Path) -> tuple[list[str], list[PersonInput]]:
+         city = _value(row, mapped["city"])
+         state = _value(row, mapped["state"]).upper()
+         zip_code = _value(row, mapped["zip_code"])
++        age = _normalize_age(_value(row, mapped["age"]))
+         location = _value(row, mapped["location"])
+-        if location and (not city or not state or not zip_code):
+-            guessed_city, guessed_state, guessed_zip = _parse_location(location)
+-            city = city or guessed_city
+-            state = state or guessed_state
+-            zip_code = zip_code or guessed_zip
++        current_address = _value(row, mapped["current_address"])
++        for address_value in (location, current_address):
++            if address_value and (not city or not state or not zip_code):
++                guessed_city, guessed_state, guessed_zip = _parse_location(address_value)
++                city = city or guessed_city
++                state = state or guessed_state
++                zip_code = zip_code or guessed_zip
+         validation_error = ""
+         if _looks_unsupported_query(query) and not (mapped["first_name"] and mapped["last_name"]):
+             validation_error = "输入中没有可识别的姓名字段"
+@@ -192,6 +205,7 @@ def load_people(path: str | Path) -> tuple[list[str], list[PersonInput]]:
+                 city=city,
+                 state=state,
+                 zip_code=zip_code,
++                age=age,
+                 validation_error=validation_error,
+             )
+         )
+diff --git a/main.py b/main.py
+index 359684a..e4cd282 100644
+--- a/main.py
++++ b/main.py
+@@ -11,6 +11,7 @@ os.environ.setdefault("PYTHONDONTWRITEBYTECODE", "1")
+ def main() -> int:
+     parser = argparse.ArgumentParser(description="MyLife 正式版 GUI")
+     parser.add_argument("--check", action="store_true", help="仅执行依赖与模块自检")
++    parser.add_argument("--auto-start", action="store_true", help="载入上次 GUI 配置后自动开始")
+     args = parser.parse_args()
+     from bootstrap import ensure_dependencies
+
+@@ -24,7 +25,7 @@ def main() -> int:
+         return 0
+     from gui import run_gui
+
+-    run_gui()
++    run_gui(auto_start=args.auto_start)
+     return 0
+
+
+diff --git a/models.py b/models.py
+index bd779ff..19393a7 100644
+--- a/models.py
++++ b/models.py
+@@ -18,6 +18,7 @@ class PersonInput:
+     city: str = ""
+     state: str = ""
+     zip_code: str = ""
++    age: str = ""
+     validation_error: str = ""
+
+     @property
+@@ -47,6 +48,8 @@ class ProfileResult:
+     full_name: str = ""
+     age: str = ""
+     birthday: str = ""
++    gender: str = ""
++    zodiac: str = ""
+     location: str = ""
+     former_names: str = ""
+     result_summary: str = ""
+@@ -61,6 +64,8 @@ class ProfileResult:
+             "full_name": self.full_name,
+             "age": self.age,
+             "birthday": self.birthday,
++            "gender": self.gender,
++            "zodiac": self.zodiac,
+             "location": self.location,
+             "former_names": self.former_names,
+             "profile_url": self.profile_url,
+diff --git a/mylife_parser.py b/mylife_parser.py
+index 9715e21..f718b26 100644
+--- a/mylife_parser.py
++++ b/mylife_parser.py
+@@ -13,6 +13,7 @@ from models import ProfileResult, SearchResult
+ PROFILE_PATH_RE = re.compile(r"^/[a-z0-9_-]+/[ce]\d+/?$", re.I)
+ AGE_RE = re.compile(r"\b(?:Age\s*)?(\d{1,3})\s*(?:years?\s*old|yrs?\.?\s*old)?\b", re.I)
+ MONTH = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
++ZODIAC = r"(?:Aries|Taurus|Gemini|Cancer|Leo|Virgo|Libra|Scorpio|Sagittarius|Capricorn|Aquarius|Pisces)"
+ BIRTHDAY_PATTERNS = (
+     re.compile(rf"\b(?:Birthday|Date\s+of\s+Birth|Born(?:\s+on)?)\s*[:\-]?\s*({MONTH}\s+\d{{1,2}}(?:,\s*\d{{4}})?)", re.I),
+     re.compile(r"\b(?:Birthday|Date\s+of\s+Birth|Born(?:\s+on)?)\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)", re.I),
+@@ -61,6 +62,7 @@ def _card_for(anchor: Tag) -> Tag:
+
+ def _name_from(anchor: Tag, card_text: str) -> str:
+     text = _clean_text(anchor.get_text(" ", strip=True))
++    text = re.sub(r",\s*\d{1,3}\b.*$", "", text)
+     text = re.sub(r"\s+\d(?:\.\d+)?/5\s*$", "", text)
+     text = re.sub(r"\s+View\s+Profile.*$", "", text, flags=re.I)
+     if 2 <= len(text.split()) <= 8 and not re.search(r"search|view|report|reputation", text, re.I):
+@@ -69,6 +71,19 @@ def _name_from(anchor: Tag, card_text: str) -> str:
+     return match.group(1) if match else ""
+
+
++def extract_age(text: str) -> str:
++    clean = _clean_text(text)
++    for pattern in (
++        re.compile(r"\bAge\s*[:\-]?\s*(\d{1,3})\b", re.I),
++        re.compile(r",\s*(\d{1,3})\b"),
++        re.compile(r"\b(\d{1,3})\s*(?:years?\s*old|yrs?\.?\s*old)\b", re.I),
++    ):
++        match = pattern.search(clean)
++        if match and 0 < int(match.group(1)) < 125:
++            return str(int(match.group(1)))
++    return ""
++
++
+ def _field(text: str, labels: str) -> str:
+     match = re.search(rf"(?:{labels})\s*[:\-]?\s*(.+?)(?=(?:Age|Lives?|Location|Aliases?|Former|View|$)\s*[:\-]?)", text, re.I)
+     return _clean_text(match.group(1)) if match else ""
+@@ -85,12 +100,12 @@ def parse_search_results(html: str, base_url: str) -> tuple[list[SearchResult],
+         seen.add(profile_url)
+         card = _card_for(anchor)
+         card_text = _clean_text(card.get_text(" ", strip=True))
+-        age_match = re.search(r"\bAge\s*[:\-]?\s*(\d{1,3})\b", card_text, re.I)
++        age = extract_age(card_text)
+         results.append(
+             SearchResult(
+                 profile_url=profile_url,
+                 full_name=_name_from(anchor, card_text),
+-                age=age_match.group(1) if age_match else "",
++                age=age,
+                 location=_field(card_text, r"Lives?\s+in|Location|Current\s+City"),
+                 former_names=_field(card_text, r"Aliases?|Former\s+Names?|Also\s+Known\s+As"),
+                 result_summary=card_text[:1000],
+@@ -118,26 +133,62 @@ def extract_birthday(text: str) -> str:
+     return ""
+
+
++def extract_gender(html: str, text: str = "") -> str:
++    soup = BeautifulSoup(html or "", "html.parser")
++    clean = _clean_text(text or soup.get_text(" ", strip=True))
++    match = re.search(r"\b(?:Gender|Sex)\s*[:\-]?\s*(Female|Male|Non[- ]?binary)\b", clean, re.I)
++    if match:
++        return match.group(1).replace("-", " ").title()
++    for span in soup.find_all("span"):
++        value = _clean_text(span.get_text(" ", strip=True))
++        if re.fullmatch(r"Female|Male|Non[- ]?binary", value, re.I):
++            return value.replace("-", " ").title()
++    return ""
++
++
++def extract_zodiac(html: str, text: str = "") -> str:
++    soup = BeautifulSoup(html or "", "html.parser")
++    for node in soup.find_all(["font", "span", "div"]):
++        value = _clean_text(node.get_text(" ", strip=True))
++        match = re.fullmatch(rf"({ZODIAC})(?:\s*(\([^)]{{3,80}}\)))?", value, re.I)
++        if match:
++            sign = match.group(1).title()
++            return f"{sign} {match.group(2)}" if match.group(2) else sign
++    clean = _clean_text(text or soup.get_text(" ", strip=True))
++    match = re.search(rf"\b({ZODIAC})(?:\s*(\([^)]{{3,80}}\)))?", clean, re.I)
++    if not match:
++        return ""
++    sign = match.group(1).title()
++    return f"{sign} {match.group(2)}" if match.group(2) else sign
++
++
+ def parse_profile_html(html: str, seed: SearchResult, result_index: int, strategy: str) -> ProfileResult:
+     soup = BeautifulSoup(html or "", "html.parser")
+     text = _clean_text(soup.get_text(" ", strip=True))
+     heading = soup.find(["h1", "h2"])
+-    full_name = _clean_text(heading.get_text(" ", strip=True)) if heading else seed.full_name
++    heading_text = _clean_text(heading.get_text(" ", strip=True)) if heading else ""
++    full_name = heading_text or seed.full_name
++    full_name = re.sub(r",\s*\d{1,3}\b.*$", "", full_name)
+     full_name = re.sub(r"\s+(?:Reputation|Profile|Background).*$", "", full_name, flags=re.I)
+-    age_match = re.search(r"\bAge\s*[:\-]?\s*(\d{1,3})\b", text, re.I)
++    age = extract_age(heading_text) or extract_age(text) or seed.age
+     location = _field(text[:8000], r"Lives?\s+in|Current\s+Address|Location") or seed.location
+     former_names = _field(text[:8000], r"Aliases?|Former\s+Names?|Also\s+Known\s+As") or seed.former_names
+     birthday = extract_birthday(text)
++    gender = extract_gender(html, text)
++    zodiac = extract_zodiac(html, text)
+     return ProfileResult(
+         result_index=result_index,
+         profile_url=seed.profile_url,
+         full_name=full_name or seed.full_name,
+-        age=age_match.group(1) if age_match else seed.age,
++        age=age,
+         birthday=birthday,
++        gender=gender,
++        zodiac=zodiac,
+         location=location,
+         former_names=former_names,
+         result_summary=seed.result_summary,
+-        profile_summary=text[:4000],
++        # 身份匹配模块需要读取页面后段的电话和曾用地址；数据库保留到 20K 字符，CSV 不输出此字段。
++        profile_summary=text[:20000],
+         query_strategy=strategy,
+         message="" if birthday else "详情页未公开生日",
+     )
+diff --git a/output_writer.py b/output_writer.py
+index 394dd37..b0a3979 100644
+--- a/output_writer.py
++++ b/output_writer.py
+@@ -4,25 +4,12 @@ import csv
+ import hashlib
+ import json
+ import os
++from collections import Counter
+ from pathlib import Path
+ from typing import Any
+
+
+-RESULT_FIELDS = [
+-    "mylife_result_index",
+-    "mylife_full_name",
+-    "mylife_age",
+-    "mylife_birthday",
+-    "mylife_location",
+-    "mylife_former_names",
+-    "mylife_profile_url",
+-    "mylife_result_summary",
+-    "mylife_profile_summary",
+-    "mylife_query_strategy",
+-    "mylife_status",
+-    "mylife_message",
+-    "mylife_created_at",
+-]
++RESULT_FIELDS = ["生日", "性别", "星座"]
+
+
+ class RealtimeCsvWriter:
+@@ -33,12 +20,31 @@ class RealtimeCsvWriter:
+         self.headers = input_headers + RESULT_FIELDS
+         self.output_dir.mkdir(parents=True, exist_ok=True)
+         self.path = self._select_path()
++        self._existing_counts = self._load_signatures()
++        self._restore_seen: Counter[str] = Counter()
+         self.file = self.path.open("a", encoding="utf-8-sig", newline="")
+         self.writer = csv.DictWriter(self.file, fieldnames=self.headers, extrasaction="ignore")
+         if self.path.stat().st_size == 0:
+             self.writer.writeheader()
+             self._flush()
+
++    def _row(self, original: dict[str, str], result: dict[str, Any], created_at: str) -> dict[str, Any]:
++        row: dict[str, Any] = {header: original.get(header, "") for header in self.input_headers}
++        row["生日"] = result.get("birthday", "")
++        row["性别"] = result.get("gender", "")
++        row["星座"] = result.get("zodiac", "")
++        return row
++
++    def _signature(self, row: dict[str, Any]) -> str:
++        payload = {key: row.get(key, "") for key in self.headers}
++        return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
++
++    def _load_signatures(self) -> Counter[str]:
++        if not self.path.exists() or self.path.stat().st_size == 0:
++            return Counter()
++        with self.path.open("r", encoding="utf-8-sig", newline="") as handle:
++            return Counter(self._signature(dict(row)) for row in csv.DictReader(handle))
++
+     def _select_path(self) -> Path:
+         base = self.output_dir / f"{self.input_path.stem}_MyLife结果.csv"
+         if not base.exists() or base.stat().st_size == 0:
+@@ -54,26 +60,24 @@ class RealtimeCsvWriter:
+         self.file.flush()
+         os.fsync(self.file.fileno())
+
+-    def append(self, original: dict[str, str], result: dict[str, Any], created_at: str) -> None:
+-        row = {header: original.get(header, "") for header in self.input_headers}
+-        mapping = {
+-            "mylife_result_index": result.get("result_index", ""),
+-            "mylife_full_name": result.get("full_name", ""),
+-            "mylife_age": result.get("age", ""),
+-            "mylife_birthday": result.get("birthday", ""),
+-            "mylife_location": result.get("location", ""),
+-            "mylife_former_names": result.get("former_names", ""),
+-            "mylife_profile_url": result.get("profile_url", ""),
+-            "mylife_result_summary": result.get("result_summary", ""),
+-            "mylife_profile_summary": result.get("profile_summary", ""),
+-            "mylife_query_strategy": result.get("query_strategy", ""),
+-            "mylife_status": result.get("status", ""),
+-            "mylife_message": result.get("message", ""),
+-            "mylife_created_at": created_at,
+-        }
+-        row.update(mapping)
++    def append(
++        self,
++        original: dict[str, str],
++        result: dict[str, Any],
++        created_at: str,
++        *,
++        restoring: bool = False,
++    ) -> bool:
++        row = self._row(original, result, created_at)
++        signature = self._signature(row)
++        if restoring:
++            self._restore_seen[signature] += 1
++            if self._restore_seen[signature] <= self._existing_counts[signature]:
++                return False
+         self.writer.writerow(row)
+         self._flush()
++        self._existing_counts[signature] += 1
++        return True
+
+     def close(self) -> None:
+         if not self.file.closed:
+diff --git a/runtime_monitor.py b/runtime_monitor.py
+new file mode 100644
+index 0000000..9d0c862
+--- /dev/null
++++ b/runtime_monitor.py
+@@ -0,0 +1,111 @@
++from __future__ import annotations
++
++import csv
++import json
++import os
++import threading
++import time
++from datetime import datetime
++from pathlib import Path
++from typing import Callable
++
++from database import JobDatabase
++
++
++class RuntimeHealthMonitor(threading.Thread):
++    """只读审计数据库、CSV、线程和日志，并原子更新实时健康快照。"""
++
++    def __init__(
++        self,
++        database: JobDatabase,
++        source_path: Path,
++        output_path: Path,
++        runtime_dir: Path,
++        log_path: Path,
++        worker_threads: Callable[[], list[threading.Thread]],
++        interval: float = 10.0,
++    ) -> None:
++        super().__init__(name="runtime-health-monitor", daemon=False)
++        self.database = database
++        self.source_path = source_path
++        self.output_path = output_path
++        self.runtime_dir = runtime_dir
++        self.log_path = log_path
++        self.worker_threads = worker_threads
++        self.interval = interval
++        self.stop_event = threading.Event()
++        self.latest: dict[str, object] = {}
++        self._lock = threading.Lock()
++
++    @staticmethod
++    def audit_csv(path: Path) -> dict[str, object]:
++        audit: dict[str, object] = {
++            "exists": path.is_file(),
++            "rows": 0,
++            "birthdays": 0,
++            "unique_birthdays": 0,
++            "blank_birthdays": 0,
++            "genders": 0,
++            "zodiacs": 0,
++            "bytes": path.stat().st_size if path.is_file() else 0,
++        }
++        if not path.is_file() or path.stat().st_size == 0:
++            return audit
++        with path.open("r", encoding="utf-8-sig", newline="") as handle:
++            for row in csv.DictReader(handle):
++                audit["rows"] = int(audit["rows"]) + 1
++                if str(row.get("生日", "")).strip():
++                    audit["birthdays"] = int(audit["birthdays"]) + 1
++                    audit["unique_birthdays"] = int(audit["unique_birthdays"]) + 1
++                else:
++                    audit["blank_birthdays"] = int(audit["blank_birthdays"]) + 1
++                if str(row.get("性别", "")).strip():
++                    audit["genders"] = int(audit["genders"]) + 1
++                if str(row.get("星座", "")).strip():
++                    audit["zodiacs"] = int(audit["zodiacs"]) + 1
++        return audit
++
++    def snapshot(self) -> dict[str, object]:
++        with self._lock:
++            return dict(self.latest)
++
++    def write_once(self) -> dict[str, object]:
++        threads = self.worker_threads()
++        payload: dict[str, object] = {
++            "updated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
++            "database": self.database.summary(self.source_path),
++            "csv": self.audit_csv(self.output_path),
++            "threads": {
++                "total": len(threads),
++                "alive": sum(1 for thread in threads if thread.is_alive()),
++                "names": [thread.name for thread in threads if thread.is_alive()],
++            },
++            "log": {
++                "path": str(self.log_path),
++                "bytes": self.log_path.stat().st_size if self.log_path.is_file() else 0,
++            },
++        }
++        self.runtime_dir.mkdir(parents=True, exist_ok=True)
++        target = self.runtime_dir / "health.json"
++        temporary = self.runtime_dir / "health.json.tmp"
++        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
++        os.replace(temporary, target)
++        with self._lock:
++            self.latest = payload
++        return payload
++
++    def run(self) -> None:
++        while not self.stop_event.is_set():
++            try:
++                self.write_once()
++            except Exception:
++                pass
++            self.stop_event.wait(self.interval)
++        try:
++            self.write_once()
++        except Exception:
++            pass
++
++    def stop(self) -> None:
++        self.stop_event.set()
++        self.join(timeout=max(5.0, self.interval + 2.0))
+diff --git a/source_rewriter.py b/source_rewriter.py
+index 4a268e7..353a9ea 100644
+--- a/source_rewriter.py
++++ b/source_rewriter.py
+@@ -7,7 +7,7 @@ from pathlib import Path
+ from input_loader import _encoding
+
+
+-def _rewrite_csv(path: Path, completed: set[str]) -> int:
++def _rewrite_csv(path: Path, completed_rows: set[int]) -> int:
+     raw = path.read_bytes()
+     encoding = _encoding(raw)
+     text = raw.decode(encoding)
+@@ -20,9 +20,8 @@ def _rewrite_csv(path: Path, completed: set[str]) -> int:
+         return 0
+     kept = [rows[0]]
+     removed = 0
+-    for row in rows[1:]:
+-        first = str(row[0] if row else "").strip()
+-        if first and first in completed:
++    for source_row, row in enumerate(rows[1:], 2):
++        if source_row in completed_rows:
+             removed += 1
+         else:
+             kept.append(row)
+@@ -36,18 +35,22 @@ def _rewrite_csv(path: Path, completed: set[str]) -> int:
+     return removed
+
+
+-def _rewrite_txt(path: Path, completed: set[str]) -> int:
++def _rewrite_txt(path: Path, completed_rows: set[int]) -> int:
+     raw = path.read_bytes()
+     encoding = _encoding(raw)
+     lines = raw.decode(encoding).splitlines()
+     removed = 0
+     kept: list[str] = []
++    logical_source_row = 2
+     for line in lines:
+-        first = line.strip()
+-        if first and first in completed:
++        if not line.strip():
++            kept.append(line)
++            continue
++        if logical_source_row in completed_rows:
+             removed += 1
+         else:
+             kept.append(line)
++        logical_source_row += 1
+     temp = path.with_name(f".{path.name}.mylife_rebuild.tmp")
+     with temp.open("w", encoding=encoding, newline="") as handle:
+         handle.write("\n".join(kept) + ("\n" if kept else ""))
+@@ -57,22 +60,21 @@ def _rewrite_txt(path: Path, completed: set[str]) -> int:
+     return removed
+
+
+-def _rewrite_xlsx(path: Path, completed: set[str]) -> int:
++def _rewrite_xlsx(path: Path, completed_rows: set[int]) -> int:
+     import openpyxl
+
+     keep_vba = path.suffix.lower() == ".xlsm"
+     workbook = openpyxl.load_workbook(path, keep_vba=keep_vba)
+     removed = 0
+     try:
+-        for sheet in workbook.worksheets:
+-            delete_rows: list[int] = []
+-            for row_index in range(2, sheet.max_row + 1):
+-                first = str(sheet.cell(row_index, 1).value or "").strip()
+-                if first and first in completed:
+-                    delete_rows.append(row_index)
+-            for row_index in reversed(delete_rows):
+-                sheet.delete_rows(row_index, 1)
+-            removed += len(delete_rows)
++        sheet = workbook.active
++        delete_rows = sorted(
++            (row_index for row_index in completed_rows if 2 <= row_index <= sheet.max_row),
++            reverse=True,
++        )
++        for row_index in delete_rows:
++            sheet.delete_rows(row_index, 1)
++        removed = len(delete_rows)
+         temp = path.with_name(f".{path.stem}.mylife_rebuild{path.suffix}")
+         workbook.save(temp)
+     finally:
+@@ -81,18 +83,18 @@ def _rewrite_xlsx(path: Path, completed: set[str]) -> int:
+     return removed
+
+
+-def remove_completed_rows(path: str | Path, completed_first_values: set[str]) -> int:
+-    """仅在整批处理结束后调用；通过同目录临时文件一次性原子重建输入。"""
++def remove_completed_rows(path: str | Path, completed_source_rows: set[int]) -> int:
++    """仅在整批结束后按原始源行号重建，重复首列值不会误删未完成行。"""
+
+     source = Path(path).resolve()
+-    completed = {str(value).strip() for value in completed_first_values if str(value).strip()}
+-    if not completed:
++    completed_rows = {int(value) for value in completed_source_rows if int(value) >= 2}
++    if not completed_rows:
+         return 0
+     suffix = source.suffix.lower()
+     if suffix in {".xlsx", ".xlsm"}:
+-        return _rewrite_xlsx(source, completed)
++        return _rewrite_xlsx(source, completed_rows)
+     if suffix == ".csv":
+-        return _rewrite_csv(source, completed)
++        return _rewrite_csv(source, completed_rows)
+     if suffix == ".txt":
+-        return _rewrite_txt(source, completed)
++        return _rewrite_txt(source, completed_rows)
+     raise ValueError(f"不支持重建的文件类型：{suffix}")
+diff --git a/tests/test_age_matching.py b/tests/test_age_matching.py
+new file mode 100644
+index 0000000..00134be
+--- /dev/null
++++ b/tests/test_age_matching.py
+@@ -0,0 +1,115 @@
++from __future__ import annotations
++
++import unittest
++from pathlib import Path
++
++from browser_worker import select_best_birthday
++from identity_matcher import score_candidate
++from models import PersonInput, ProfileResult
++
++
++class AgeMatchingTests(unittest.TestCase):
++    def person(self, age: str = "42") -> PersonInput:
++        return PersonInput(
++            source_path=Path("people.csv"),
++            source_row=2,
++            headers=["name", "age", "city", "state", "zip"],
++            original={},
++            first_value="Jane Doe",
++            first_name="Jane",
++            last_name="Doe",
++            city="Denver",
++            state="CO",
++            zip_code="80202",
++            age=age,
++        )
++
++    def test_exact_age_then_name_address_selects_one_birthday(self) -> None:
++        details = [
++            ProfileResult(1, "https://www.mylife.com/a/e1", full_name="Jane Doe", age="42", birthday="January 1, 1984", location="Miami, FL"),
++            ProfileResult(2, "https://www.mylife.com/b/e2", full_name="Jane A Doe", age="42", birthday="March 7, 1984", location="Denver, CO 80202"),
++            ProfileResult(3, "https://www.mylife.com/c/e3", full_name="Jane Doe", age="41", birthday="April 8, 1985", location="Denver, CO"),
++        ]
++        selected = select_best_birthday(self.person(), details, len(details))
++        self.assertEqual(selected.birthday, "March 7, 1984")
++        self.assertIn("已匹配生日", selected.status)
++        self.assertIn("2 个同龄候选", selected.message)
++
++    def test_no_age_match_falls_back_to_name_address(self) -> None:
++        details = [
++            ProfileResult(1, "https://www.mylife.com/a/e1", full_name="Someone Else", age="41", birthday="January 1, 1985", location="Miami, FL"),
++            ProfileResult(2, "https://www.mylife.com/b/e2", full_name="Jane Doe", age="40", birthday="March 7, 1986", location="Denver, CO 80202"),
++        ]
++        selected = select_best_birthday(self.person(), details, len(details))
++        self.assertEqual(selected.birthday, "March 7, 1986")
++        self.assertIn("没有年龄 42", selected.message)
++
++    def test_exact_phone_is_strongest_within_same_age_pool(self) -> None:
++        person = self.person()
++        person.original = {
++            "primary_phone": "(303) 555-1234",
++            "current_address": "1450 Pearl St, Denver, CO 80202",
++        }
++        details = [
++            ProfileResult(1, "https://www.mylife.com/a/e1", full_name="Jane Doe", age="42", birthday="January 1, 1984", location="Denver, CO 80202"),
++            ProfileResult(2, "https://www.mylife.com/b/e2", full_name="Jane Doe", age="42", birthday="March 7, 1984", location="Boulder, CO", profile_summary="Phone (303) 555-1234"),
++        ]
++        selected = select_best_birthday(person, details, len(details))
++        self.assertEqual(selected.birthday, "March 7, 1984")
++        self.assertIn("完整手机号一致", selected.message)
++
++    def test_area_code_alone_is_weak_and_cannot_beat_past_address(self) -> None:
++        person = self.person(age="")
++        person.original = {
++            "primary_phone": "(303) 555-1234",
++            "past_addresses": "907 Pine Rd, Aurora, CO 80012",
++        }
++        details = [
++            ProfileResult(1, "https://www.mylife.com/a/e1", full_name="Jane Doe", birthday="January 1, 1984", profile_summary="Phone (303) 777-8888"),
++            ProfileResult(2, "https://www.mylife.com/b/e2", full_name="Jane Doe", birthday="March 7, 1984", profile_summary="Past address 907 Pine Rd, Aurora, CO 80012"),
++        ]
++        selected = select_best_birthday(person, details, len(details))
++        self.assertEqual(selected.birthday, "March 7, 1984")
++        self.assertIn("曾用地址", selected.message)
++
++    def test_first_two_house_digits_require_same_street(self) -> None:
++        person = self.person(age="")
++        person.original = {"current_address": "1450 Pearl St, Denver, CO 80202"}
++        good = ProfileResult(1, "https://www.mylife.com/a/e1", full_name="Jane Doe", profile_summary="Current address 1499 Pearl St, Denver, CO")
++        unrelated = ProfileResult(2, "https://www.mylife.com/b/e2", full_name="Jane Doe", profile_summary="Current address 1488 Oak St, Denver, CO")
++        good_score = score_candidate(person, good)
++        unrelated_score = score_candidate(person, unrelated)
++        self.assertGreater(good_score.score, unrelated_score.score)
++        self.assertIn("当前地址门牌号前2位和街道一致", good_score.evidence)
++
++    def test_birthday_presence_does_not_override_stronger_identity(self) -> None:
++        person = self.person(age="")
++        person.original = {"primary_phone": "(303) 555-1234"}
++        details = [
++            ProfileResult(1, "https://www.mylife.com/a/e1", full_name="Jane Doe", profile_summary="Phone (303) 555-1234"),
++            ProfileResult(2, "https://www.mylife.com/b/e2", full_name="Jane Doe", birthday="March 7, 1984", location="Miami, FL"),
++        ]
++        selected = select_best_birthday(person, details, len(details))
++        self.assertEqual(selected.profile_url, "https://www.mylife.com/a/e1")
++        self.assertEqual(selected.birthday, "")
++
++    def test_email_and_multiple_relatives_are_independent_evidence(self) -> None:
++        person = self.person(age="")
++        person.original = {
++            "email_addresses": "jane@example.com",
++            "possible_relatives": "John Doe|Mary Doe",
++        }
++        detail = ProfileResult(
++            1,
++            "https://www.mylife.com/a/e1",
++            full_name="Jane Doe",
++            profile_summary="Emails jane@example.com Possible relatives John Doe and Mary Doe",
++        )
++        scored = score_candidate(person, detail)
++        self.assertIn("完整邮箱一致", scored.evidence)
++        self.assertIn("共同亲属一致2人", scored.evidence)
++        self.assertGreaterEqual(scored.strong_categories, 3)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tests/test_browser_strategy.py b/tests/test_browser_strategy.py
+new file mode 100644
+index 0000000..a67da39
+--- /dev/null
++++ b/tests/test_browser_strategy.py
+@@ -0,0 +1,69 @@
++from __future__ import annotations
++
++import threading
++import unittest
++from pathlib import Path
++from types import SimpleNamespace
++
++from browser_worker import BrowserSession
++from models import PersonInput, ProfileResult, SearchResult
++
++
++class BrowserStrategyTests(unittest.TestCase):
++    def person(self) -> PersonInput:
++        return PersonInput(
++            source_path=Path("people.csv"),
++            source_row=2,
++            headers=["name", "age", "city", "state", "zip"],
++            original={},
++            first_value="Jane Doe",
++            first_name="Jane",
++            last_name="Doe",
++            city="Denver",
++            state="CO",
++            zip_code="80202",
++            age="42",
++        )
++
++    def session(self, search_batches: list[list[SearchResult]]) -> tuple[BrowserSession, list[str]]:
++        session = object.__new__(BrowserSession)
++        session.worker_number = 1
++        session.page = SimpleNamespace(url="https://www.mylife.com/pub-multisearch.pubview")
++        session.stop_event = threading.Event()
++        calls: list[str] = []
++
++        def collect(url: str) -> list[SearchResult]:
++            calls.append(url)
++            return search_batches[len(calls) - 1]
++
++        session._collect_search_results = collect
++        session._collect_profile = lambda item, index, strategy, search_url: ProfileResult(
++            index,
++            item.profile_url,
++            full_name=item.full_name,
++            age=item.age,
++            birthday="10/03/1983",
++            location=item.location,
++            query_strategy=strategy,
++        )
++        session.log = lambda _message: None
++        return session, calls
++
++    def test_location_hit_does_not_run_name_only_search(self) -> None:
++        hit = SearchResult("https://www.mylife.com/jane-doe/e1", "Jane Doe", "42", "Denver CO 80202")
++        session, calls = self.session([[hit]])
++        session.process(self.person())
++        self.assertEqual(len(calls), 1)
++        self.assertIn("searchLocation=Denver%2C+CO+80202", calls[0])
++
++    def test_location_zero_results_then_runs_name_only_search(self) -> None:
++        hit = SearchResult("https://www.mylife.com/jane-doe/e1", "Jane Doe", "42", "Denver CO 80202")
++        session, calls = self.session([[], [hit]])
++        session.process(self.person())
++        self.assertEqual(len(calls), 2)
++        self.assertIn("searchLocation=", calls[0])
++        self.assertIn("search=Jane+Doe", calls[1])
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tests/test_controller_offline.py b/tests/test_controller_offline.py
+index 7bf392f..1194bb9 100644
+--- a/tests/test_controller_offline.py
++++ b/tests/test_controller_offline.py
+@@ -6,7 +6,7 @@ import unittest
+ from pathlib import Path
+ from unittest.mock import patch
+
+-from controller import AppController
++from controller import AppController, _is_proxy_network_error
+ from models import ProfileResult, RunConfig
+
+
+@@ -19,8 +19,7 @@ class FakeBrowserSession:
+
+     def process(self, person: object) -> list[ProfileResult]:
+         return [
+-            ProfileResult(1, "https://www.mylife.com/jane-doe/e1", full_name="Jane Doe", birthday="March 7, 1984"),
+-            ProfileResult(2, "https://www.mylife.com/jane-doe/e2", full_name="Jane Doe", birthday="April 8, 1985"),
++            ProfileResult(1, "https://www.mylife.com/jane-doe/e1", full_name="Jane Doe", birthday="March 7, 1984", gender="Female", zodiac="Pisces (February 19 - March 20)"),
+         ]
+
+     def clear_person_data(self) -> None:
+@@ -34,6 +33,10 @@ class FakeBrowserSession:
+
+
+ class ControllerOfflineTests(unittest.TestCase):
++    def test_proxy_browser_connection_error_is_detected_for_refresh(self) -> None:
++        self.assertTrue(_is_proxy_network_error("Page.goto: net::ERR_SOCKS_CONNECTION_FAILED"))
++        self.assertFalse(_is_proxy_network_error("selector not found"))
++
+     def test_full_pipeline_realtime_output_then_single_rebuild(self) -> None:
+         with tempfile.TemporaryDirectory() as directory:
+             root = Path(directory)
+@@ -47,9 +50,12 @@ class ControllerOfflineTests(unittest.TestCase):
+             result_path = output / "people_MyLife结果.csv"
+             with result_path.open("r", encoding="utf-8-sig", newline="") as handle:
+                 rows = list(csv.DictReader(handle))
+-            self.assertEqual(len(rows), 2)
++            self.assertEqual(len(rows), 1)
+             self.assertEqual(rows[0]["note"], "keep")
+-            self.assertEqual(rows[1]["mylife_birthday"], "April 8, 1985")
++            self.assertEqual(list(rows[0])[-3:], ["生日", "性别", "星座"])
++            self.assertEqual(rows[0]["生日"], "March 7, 1984")
++            self.assertEqual(rows[0]["性别"], "Female")
++            self.assertEqual(rows[0]["星座"], "Pisces (February 19 - March 20)")
+             with source.open("r", encoding="utf-8-sig", newline="") as handle:
+                 remaining = list(csv.reader(handle))
+             self.assertEqual(remaining, [["first_name", "last_name", "note"]])
+diff --git a/tests/test_database_output.py b/tests/test_database_output.py
+index 439010e..91469cf 100644
+--- a/tests/test_database_output.py
++++ b/tests/test_database_output.py
+@@ -38,7 +38,7 @@ class DatabaseOutputTests(unittest.TestCase):
+                 "result",
+                 job_id,
+                 person,
+-                ProfileResult(1, "https://www.mylife.com/jane-doe/e1", full_name="Jane Doe", birthday="March 7, 1984"),
++                ProfileResult(1, "https://www.mylife.com/jane-doe/e1", full_name="Jane Doe", birthday="March 7, 1984", gender="Female", zodiac="Pisces (February 19 - March 20)"),
+             )
+             writer.put("done", job_id, "ok")
+             writer.flush()
+@@ -47,13 +47,39 @@ class DatabaseOutputTests(unittest.TestCase):
+             with csv_writer.path.open("r", encoding="utf-8-sig", newline="") as handle:
+                 rows = list(csv.DictReader(handle))
+             self.assertEqual(rows[0]["name"], "Jane Doe")
+-            self.assertEqual(rows[0]["mylife_birthday"], "March 7, 1984")
++            self.assertEqual(list(rows[0])[-3:], ["生日", "性别", "星座"])
++            self.assertEqual(rows[0]["生日"], "March 7, 1984")
++            self.assertEqual(rows[0]["性别"], "Female")
++            self.assertEqual(rows[0]["星座"], "Pisces (February 19 - March 20)")
++            replayed = database.existing_results(input_path)
++            self.assertEqual(len(replayed), 1)
++            self.assertFalse(csv_writer.append(*replayed[0], restoring=True))
+             writer.close()
+             with closing(sqlite3.connect(database.path)) as connection:
+                 mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
+             self.assertEqual(mode.lower(), "wal")
+             self.assertEqual(database.summary(input_path).get("done"), 1)
+
++    def test_two_identical_source_rows_are_preserved_and_replay_is_idempotent(self) -> None:
++        with tempfile.TemporaryDirectory() as directory:
++            root = Path(directory)
++            input_path = root / "same.csv"
++            input_path.write_text("name\nJane Doe\nJane Doe\n", encoding="utf-8")
++            original = {"name": "Jane Doe"}
++            result = {"birthday": "01/01/1980", "gender": "Female", "zodiac": "Capricorn"}
++            writer = RealtimeCsvWriter(root, input_path, ["name"])
++            self.assertTrue(writer.append(original, result, "t1"))
++            self.assertTrue(writer.append(original, result, "t2"))
++            writer.close()
++
++            replay = RealtimeCsvWriter(root, input_path, ["name"])
++            self.assertFalse(replay.append(original, result, "t1", restoring=True))
++            self.assertFalse(replay.append(original, result, "t2", restoring=True))
++            self.assertTrue(replay.append(original, result, "t3", restoring=True))
++            replay.close()
++            with (root / "same_MyLife结果.csv").open("r", encoding="utf-8-sig", newline="") as handle:
++                self.assertEqual(len(list(csv.DictReader(handle))), 3)
++
+
+ if __name__ == "__main__":
+     unittest.main()
+diff --git a/tests/test_input_loader.py b/tests/test_input_loader.py
+index 9945348..2c694d1 100644
+--- a/tests/test_input_loader.py
++++ b/tests/test_input_loader.py
+@@ -49,6 +49,26 @@ class InputLoaderTests(unittest.TestCase):
+             _, people = load_people(path)
+             self.assertTrue(people[0].validation_error)
+
++    def test_age_column_is_normalized(self) -> None:
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "people.csv"
++            path.write_text("first_name,last_name,age\nJane,Doe,42.0\n", encoding="utf-8")
++            _, people = load_people(path)
++            self.assertEqual(people[0].age, "42")
++
++    def test_current_address_supplies_zip_when_city_state_column_has_no_zip(self) -> None:
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "people.csv"
++            path.write_text(
++                "first_name,last_name,address,current_address\n"
++                "Jane,Doe,Denver CO,1450 Pearl St Denver CO 80202\n",
++                encoding="utf-8",
++            )
++            _, people = load_people(path)
++            self.assertEqual(people[0].city, "Denver")
++            self.assertEqual(people[0].state, "CO")
++            self.assertEqual(people[0].zip_code, "80202")
++
+
+ if __name__ == "__main__":
+     unittest.main()
+diff --git a/tests/test_parser.py b/tests/test_parser.py
+index a3d2dd3..b2becd4 100644
+--- a/tests/test_parser.py
++++ b/tests/test_parser.py
+@@ -3,7 +3,7 @@ from __future__ import annotations
+ import unittest
+
+ from models import SearchResult
+-from mylife_parser import build_search_url, extract_birthday, parse_profile_html, parse_search_results
++from mylife_parser import build_search_url, extract_age, extract_birthday, extract_gender, extract_zodiac, parse_profile_html, parse_search_results
+
+
+ class ParserTests(unittest.TestCase):
+@@ -48,6 +48,40 @@ class ParserTests(unittest.TestCase):
+         self.assertEqual(result.birthday, "")
+         self.assertEqual(result.message, "详情页未公开生日")
+
++    def test_comma_age_in_real_style_titles(self) -> None:
++        html = '<li class="search-result"><a href="/olivia-rigor/e1">Olivia Rigor, 35</a><div>Jersey City, NJ 07306</div></li>'
++        results, _, _ = parse_search_results(html, "https://www.mylife.com/search")
++        self.assertEqual(results[0].full_name, "Olivia Rigor")
++        self.assertEqual(results[0].age, "35")
++        profile = parse_profile_html(
++            "<h1>Olivia Rigor, 35</h1><p>Birthday: March 7, 1991</p>",
++            results[0],
++            1,
++            "姓名",
++        )
++        self.assertEqual(profile.full_name, "Olivia Rigor")
++        self.assertEqual(profile.age, "35")
++        self.assertEqual(extract_age("Mary Dangerfield, 77 Houston, TX"), "77")
++
++    def test_gender_from_profile_span(self) -> None:
++        html = '<div><label>Gender</label><span class="fz-md roboto-reg"> Female </span></div>'
++        self.assertEqual(extract_gender(html), "Female")
++        seed = SearchResult("https://www.mylife.com/jane-doe/e1001", full_name="Jane Doe")
++        result = parse_profile_html(f"<h1>Jane Doe, 42</h1>{html}", seed, 1, "姓名")
++        self.assertEqual(result.gender, "Female")
++
++    def test_real_sentence_age_and_birthday(self) -> None:
++        text = "is 48 years old and was born on 10/03/1977. Currently, Jennifer lives in"
++        self.assertEqual(extract_age(text), "48")
++        self.assertEqual(extract_birthday(text), "10/03/1977")
++
++    def test_zodiac_from_profile_font(self) -> None:
++        html = '<font _mstmutation="1">Libra (September 23 - October 22)</font>'
++        self.assertEqual(extract_zodiac(html), "Libra (September 23 - October 22)")
++        seed = SearchResult("https://www.mylife.com/jane-doe/e1001", full_name="Jane Doe")
++        result = parse_profile_html(f"<h1>Jane Doe, 48</h1>{html}", seed, 1, "姓名")
++        self.assertEqual(result.zodiac, "Libra (September 23 - October 22)")
++
+
+ if __name__ == "__main__":
+     unittest.main()
+diff --git a/tests/test_source_rewriter.py b/tests/test_source_rewriter.py
+index 3e27065..4155759 100644
+--- a/tests/test_source_rewriter.py
++++ b/tests/test_source_rewriter.py
+@@ -11,15 +11,15 @@ from source_rewriter import remove_completed_rows
+
+
+ class SourceRewriterTests(unittest.TestCase):
+-    def test_csv_is_rebuilt_once_by_first_column(self) -> None:
++    def test_csv_is_rebuilt_by_source_row_not_duplicate_first_value(self) -> None:
+         with tempfile.TemporaryDirectory() as directory:
+             path = Path(directory) / "input.csv"
+             path.write_text("name,note\nJane Doe,a\nJohn Doe,b\nJane Doe,c\n", encoding="utf-8-sig")
+-            removed = remove_completed_rows(path, {"Jane Doe"})
+-            self.assertEqual(removed, 2)
++            removed = remove_completed_rows(path, {2})
++            self.assertEqual(removed, 1)
+             with path.open("r", encoding="utf-8-sig", newline="") as handle:
+                 rows = list(csv.reader(handle))
+-            self.assertEqual(rows, [["name", "note"], ["John Doe", "b"]])
++            self.assertEqual(rows, [["name", "note"], ["John Doe", "b"], ["Jane Doe", "c"]])
+
+     def test_xlsx_rebuild_preserves_unprocessed_rows(self) -> None:
+         with tempfile.TemporaryDirectory() as directory:
+@@ -29,13 +29,18 @@ class SourceRewriterTests(unittest.TestCase):
+             sheet.append(["name", "note"])
+             sheet.append(["Jane Doe", "a"])
+             sheet.append(["John Doe", "b"])
++            second = workbook.create_sheet("keep")
++            second.append(["name", "note"])
++            second.append(["Other Person", "must stay"])
+             workbook.save(path)
+             workbook.close()
+-            self.assertEqual(remove_completed_rows(path, {"Jane Doe"}), 1)
++            self.assertEqual(remove_completed_rows(path, {2}), 1)
+             workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+             rows = list(workbook.active.iter_rows(values_only=True))
++            other_rows = list(workbook["keep"].iter_rows(values_only=True))
+             workbook.close()
+             self.assertEqual(rows, [("name", "note"), ("John Doe", "b")])
++            self.assertEqual(other_rows, [("name", "note"), ("Other Person", "must stay")])
+
+
+ if __name__ == "__main__":
 diff --git a/version.py b/version.py
-index 1ab3f6e..8cdd71d 100644
+index 8cdd71d..f4ec80d 100644
 --- a/version.py
 +++ b/version.py
 @@ -1,3 +1,3 @@
  """MyLife 正式版版本信息。"""
- 
--__version__ = "1.0.0"
-+__version__ = "1.0.1"
-diff --git "a/\345\220\257\345\212\250MyLife\346\255\243\345\274\217\347\211\210.cmd" "b/\345\220\257\345\212\250MyLife\346\255\243\345\274\217\347\211\210.cmd"
-index 84cfabc5fd1419cbfb6d3cbe2da418585d431d2e..d86f844633617167e5d0ed251a37adb88dee2754 100644
-GIT binary patch
-literal 372
-zcmaivK}*9x6ol`A{D&d1-b|B&9tw)ot{P|?k%;D0w!1H8Va<kQE9T;FcN1F_5j;H@
-z=FNO_MY6WARTTz3Ib)?TVIXVS;`}U0Qd~CsQBasEMC?PgNi;bT-Iv8(zFFp*;^`qP
-z_@XTMb-v^msW*f{JGk05I9*_8t?OMU+PEFUKv$ryvz?(gGDz`aoyB~Tem=bl-Td#T
-zMjeRhT|3NnNXG7CoF9Z}U9PelzU9wZv7PwXcR%x}<No;TU_GpKMYw&;&^ysNR6-k4
-dG5ClKX%)@EekU>yF7`e7kOL1+a0L3x{R!qxakKyc
 
-literal 283
-zcmZ=rP0q+y$WKe-O3p|wP%tw!FfdfG%PY;{Do!oQ$xlwq;Yv<X&`(iNQmsoVFi-*s
-zD+EM_c=-Fd`1^%~2YH6LIz@)KI{Ul0+8S~dRF-7q=PBqqDJ13RmlT&2B^KxvRB~me
-zDWnz^<rn3omZjz>7%HUam*gv0frXH?<R)h35mKF6ky)akpQK>G#Rb(5@_-%}*c-l;
-zKACB$3htqv3Qs4jf7-R;>5`2vwk&<Wr|0FAnJ?C_f4-pc{hnE>2&brW6(p7xr*gqe
-HMUesk?qg?X
-
+-__version__ = "1.0.1"
++__version__ = "1.1.0"

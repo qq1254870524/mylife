@@ -16,10 +16,25 @@ from input_loader import load_people
 from models import PersonInput, RunConfig
 from output_writer import RealtimeCsvWriter
 from proxy_pool import ProxyGeo, ProxyPool, ProxySpec, parse_proxy_line
+from runtime_monitor import RuntimeHealthMonitor
 from source_rewriter import remove_completed_rows
 
 LogFn = Callable[[str], None]
 ProgressFn = Callable[[dict[str, int | str]], None]
+
+
+def _is_proxy_network_error(message: str) -> bool:
+    upper = str(message or "").upper()
+    return any(
+        marker in upper
+        for marker in (
+            "ERR_SOCKS_CONNECTION_FAILED",
+            "ERR_PROXY_CONNECTION_FAILED",
+            "ERR_TUNNEL_CONNECTION_FAILED",
+            "SOCKS SERVER GENERAL FAILURE",
+            "CONNECTION RESET BY PEER",
+        )
+    )
 
 
 class AppController:
@@ -38,6 +53,10 @@ class AppController:
         self._completed = 0
         self._total = 0
         self.output_path: Path | None = None
+        self.monitor: RuntimeHealthMonitor | None = None
+        self._finished_clean = False
+        self.diagnostics_dir = self.runtime_dir / "diagnostics" / self.log_path.stem
+        self._final_status = "未开始"
 
     def _log(self, message: str) -> None:
         clean = str(message).replace("\r", " ").strip()
@@ -58,6 +77,12 @@ class AppController:
             "pending": summary.get("pending", 0) + summary.get("retry", 0) + summary.get("running", 0),
             "output": str(self.output_path or ""),
         }
+        if self.monitor:
+            csv_audit = dict(self.monitor.snapshot().get("csv", {}))
+            payload["output_rows"] = int(csv_audit.get("rows", 0))
+            payload["birthdays"] = int(csv_audit.get("birthdays", 0))
+            payload["genders"] = int(csv_audit.get("genders", 0))
+            payload["zodiacs"] = int(csv_audit.get("zodiacs", 0))
         self.progress(payload)
 
     def start_async(self) -> None:
@@ -106,6 +131,21 @@ class AppController:
                 except OSError:
                     pass
 
+    def _write_run_summary(self) -> None:
+        payload = {
+            "finished_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "status": self._final_status,
+            "input_file": str(self.config.input_file),
+            "output_file": str(self.output_path or ""),
+            "total": self._total,
+            "monitor": self.monitor.snapshot() if self.monitor else {},
+        }
+        target = self.log_path.with_name(self.log_path.stem + "_summary.json")
+        temporary = target.with_suffix(".json.tmp")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(temporary, target)
+
     def _worker(
         self,
         worker_number: int,
@@ -133,6 +173,7 @@ class AppController:
                 stop_event=self.stop_event,
                 log=self._log,
                 max_search_pages=self.config.max_search_pages,
+                diagnostics_dir=self.diagnostics_dir,
             )
             while not self.stop_event.is_set():
                 try:
@@ -154,6 +195,8 @@ class AppController:
                     writer.put("retry", job_id, "用户停止")
                     break
                 except CloudflareFailure as exc:
+                    if session:
+                        session.capture_diagnostic("cloudflare-failure")
                     challenge_streak += 1
                     next_attempt = attempts + 1
                     self._log(f"线程{worker_number} Cloudflare 连续失败 {challenge_streak} 次")
@@ -174,11 +217,18 @@ class AppController:
                     next_attempt = attempts + 1
                     message = f"{type(exc).__name__}: {exc}"
                     self._log(f"线程{worker_number} 第 {person.source_row} 行处理错误：{message}")
+                    if session:
+                        session.capture_diagnostic("job-error")
                     if next_attempt < self.config.max_job_attempts and not self.stop_event.is_set():
                         writer.put("retry", job_id, message)
                         job_queue.put((job_id, person, next_attempt))
                         if session:
-                            session.rebuild()
+                            if proxy_spec and proxy_pool and _is_proxy_network_error(message):
+                                self._log(f"线程{worker_number} 检测到代理通道错误，刷新出口后重建浏览器")
+                                refreshed_geo = proxy_pool.refresh_after_challenge(proxy_spec, self.stop_event)
+                                session.rebuild(refreshed_geo)
+                            else:
+                                session.rebuild()
                     else:
                         writer.put("failed", job_id, message)
                 finally:
@@ -201,6 +251,13 @@ class AppController:
             self._log(f"导入识别 {len(people)} 行，新增数据库任务 {inserted} 条，待处理 {len(jobs)} 条")
             csv_writer = RealtimeCsvWriter(self.config.output_dir, self.config.input_file, headers)
             self.output_path = csv_writer.path
+            restored = sum(
+                1
+                for original, result, created_at in self.database.existing_results(self.config.input_file)
+                if csv_writer.append(original, result, created_at, restoring=True)
+            )
+            if restored:
+                self._log(f"从 SQLite 断点恢复实时 CSV：补写 {restored} 行")
             writer = DatabaseWriter(self.database, csv_writer, self._log)
             writer.start()
             job_queue: queue.Queue[tuple[int, PersonInput, int]] = queue.Queue()
@@ -218,31 +275,63 @@ class AppController:
                 )
                 self.worker_threads.append(thread)
                 thread.start()
+            self.monitor = RuntimeHealthMonitor(
+                self.database,
+                self.config.input_file,
+                csv_writer.path,
+                self.runtime_dir,
+                self.log_path,
+                lambda: list(self.worker_threads),
+            )
+            self.monitor.start()
             for thread in self.worker_threads:
                 thread.join()
+            if self.monitor:
+                self.monitor.stop()
             writer.flush()
             if self.stop_event.is_set():
                 self._log("任务已停止；未执行输入文件重建，已保留数据库断点")
                 self._emit_progress("已停止")
+                self._final_status = "已停止"
             else:
                 summary = self.database.summary(self.config.input_file)
                 unfinished = summary.get("pending", 0) + summary.get("retry", 0) + summary.get("running", 0)
                 if unfinished:
                     self._log(f"仍有 {unfinished} 条任务未被可用浏览器领取；未重建输入文件")
                     self._emit_progress("失败")
+                    self._final_status = "失败"
                 else:
-                    completed = csv_writer.first_column_values()
-                    removed = remove_completed_rows(self.config.input_file, completed)
-                    self._log(f"全部处理线程结束，已一次性重建输入文件并删除 {removed} 行明确结果")
-                    self._emit_progress("已完成" if not summary.get("failed", 0) else "失败")
+                    completed_rows = self.database.done_source_rows(self.config.input_file)
+                    removed = remove_completed_rows(self.config.input_file, completed_rows)
+                    failed = summary.get("failed", 0)
+                    self._finished_clean = failed == 0
+                    self._final_status = "已完成" if self._finished_clean else "失败"
+                    self._emit_progress(self._final_status)
+                    purged = self.database.delete_source(self.config.input_file)
+                    self._log(
+                        f"全部处理线程结束，已按源行号一次性重建输入文件并删除 {removed} 行明确结果；"
+                        f"清理断点任务 {purged} 条；失败保留 {failed} 行"
+                    )
         except Exception as exc:
             self._log(f"任务终止：{type(exc).__name__}: {exc}")
             self._emit_progress("失败")
+            self._final_status = "失败"
         finally:
+            if self.monitor:
+                try:
+                    self.monitor.stop()
+                except Exception:
+                    pass
             if writer:
                 try:
                     writer.close()
                 except Exception as exc:
                     self._log(f"关闭数据库写入线程失败：{type(exc).__name__}: {exc}")
+            try:
+                self._write_run_summary()
+            except Exception as exc:
+                self._log(f"写入运行汇总失败：{type(exc).__name__}: {exc}")
             self._cleanup_cache()
+            if self._finished_clean:
+                shutil.rmtree(self.runtime_dir, ignore_errors=True)
             self.worker_threads.clear()

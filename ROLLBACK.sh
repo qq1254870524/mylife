@@ -2,8 +2,9 @@
 set -euo pipefail
 
 TARGET="${1:-$(cd "$(dirname "$0")" && pwd)}"
+PYTHON_BIN="$(command -v python3 || command -v python)"
 
-python - "$TARGET" <<'PY'
+"$PYTHON_BIN" - "$TARGET" <<'PY'
 from __future__ import annotations
 
 import hashlib
@@ -13,16 +14,16 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1]).resolve()
-base_commit = "91399689e0077374c151c56ded7a5d7e16d6b2d2"
-launcher = "启动MyLife正式版.cmd"
-expected_fixed = "C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF"
-expected_original = "64837F9A1477162492D59D571839DC17C9C1D7264C3A4B10DCBC2D1C70FB1352"
+base_commit = "24588fa8d50d2fbd5611d9a040b9c0452966ebb5"
+expected_modified_version = "1.1.0"
+expected_restored_hash = "8740E1202A509450D8164DECBB30E06C5D9E307209FE1C9D3916E8A59E52798C"
+preserve = {"ROLLBACK.sh", "VERIFICATION.txt", "MODIFIED_FILE", "DIFF_FILE"}
 
 if not (root / ".git").exists():
     raise SystemExit(f"ROLLBACK_ABORT missing git metadata: {root}")
-current = hashlib.sha256((root / launcher).read_bytes()).hexdigest().upper()
-if current != expected_fixed:
-    raise SystemExit(f"ROLLBACK_ABORT launcher hash mismatch: {current}")
+version_text = (root / "version.py").read_text(encoding="utf-8")
+if expected_modified_version not in version_text:
+    raise SystemExit("ROLLBACK_ABORT expected v1.1.0 source was not found")
 
 def git_bytes(*args: str) -> bytes:
     process = subprocess.run(
@@ -37,7 +38,7 @@ def git_bytes(*args: str) -> bytes:
 changed = [
     item.decode("utf-8")
     for item in git_bytes("diff", "--name-only", "-z", f"{base_commit}..HEAD").split(b"\0")
-    if item and item.decode("utf-8") != "ROLLBACK.sh"
+    if item and item.decode("utf-8") not in preserve
 ]
 base_files = {
     item.decode("utf-8")
@@ -55,12 +56,13 @@ for relative in changed:
     elif path.is_file() or path.is_symlink():
         path.unlink()
 
-restored = hashlib.sha256((root / launcher).read_bytes()).hexdigest().upper()
-if restored != expected_original:
-    raise SystemExit(f"ROLLBACK_ABORT restored hash mismatch: {restored}")
+restored_hash = hashlib.sha256((root / "version.py").read_bytes()).hexdigest().upper()
+if restored_hash != expected_restored_hash:
+    raise SystemExit(f"ROLLBACK_ABORT restored version hash mismatch: {restored_hash}")
+if (root / "identity_matcher.py").exists() or (root / "runtime_monitor.py").exists():
+    raise SystemExit("ROLLBACK_ABORT v1.1.0-only module still exists")
 print(
     f"ROLLBACK_OK base={base_commit[:7]} files={len(changed)} "
-    "launcher_sha256=64837F9A1477162492D59D571839DC17C9C1D7264C3A4B10DCBC2D1C70FB1352 "
-    "restored_behavior=lf_only_v1.0.0"
+    f"version_sha256={restored_hash} restored_behavior=v1.0.1_launcher_and_v1.0.0_collection"
 )
 PY

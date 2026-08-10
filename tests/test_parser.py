@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 
 from models import SearchResult
-from mylife_parser import build_search_url, extract_birthday, parse_profile_html, parse_search_results
+from mylife_parser import build_search_url, extract_age, extract_birthday, extract_gender, extract_zodiac, parse_profile_html, parse_search_results
 
 
 class ParserTests(unittest.TestCase):
@@ -47,6 +47,40 @@ class ParserTests(unittest.TestCase):
         result = parse_profile_html("<h1>Jane Doe</h1><p>Date of Birth: Public Private</p>", seed, 1, "姓名")
         self.assertEqual(result.birthday, "")
         self.assertEqual(result.message, "详情页未公开生日")
+
+    def test_comma_age_in_real_style_titles(self) -> None:
+        html = '<li class="search-result"><a href="/olivia-rigor/e1">Olivia Rigor, 35</a><div>Jersey City, NJ 07306</div></li>'
+        results, _, _ = parse_search_results(html, "https://www.mylife.com/search")
+        self.assertEqual(results[0].full_name, "Olivia Rigor")
+        self.assertEqual(results[0].age, "35")
+        profile = parse_profile_html(
+            "<h1>Olivia Rigor, 35</h1><p>Birthday: March 7, 1991</p>",
+            results[0],
+            1,
+            "姓名",
+        )
+        self.assertEqual(profile.full_name, "Olivia Rigor")
+        self.assertEqual(profile.age, "35")
+        self.assertEqual(extract_age("Mary Dangerfield, 77 Houston, TX"), "77")
+
+    def test_gender_from_profile_span(self) -> None:
+        html = '<div><label>Gender</label><span class="fz-md roboto-reg"> Female </span></div>'
+        self.assertEqual(extract_gender(html), "Female")
+        seed = SearchResult("https://www.mylife.com/jane-doe/e1001", full_name="Jane Doe")
+        result = parse_profile_html(f"<h1>Jane Doe, 42</h1>{html}", seed, 1, "姓名")
+        self.assertEqual(result.gender, "Female")
+
+    def test_real_sentence_age_and_birthday(self) -> None:
+        text = "is 48 years old and was born on 10/03/1977. Currently, Jennifer lives in"
+        self.assertEqual(extract_age(text), "48")
+        self.assertEqual(extract_birthday(text), "10/03/1977")
+
+    def test_zodiac_from_profile_font(self) -> None:
+        html = '<font _mstmutation="1">Libra (September 23 - October 22)</font>'
+        self.assertEqual(extract_zodiac(html), "Libra (September 23 - October 22)")
+        seed = SearchResult("https://www.mylife.com/jane-doe/e1001", full_name="Jane Doe")
+        result = parse_profile_html(f"<h1>Jane Doe, 48</h1>{html}", seed, 1, "姓名")
+        self.assertEqual(result.zodiac, "Libra (September 23 - October 22)")
 
 
 if __name__ == "__main__":

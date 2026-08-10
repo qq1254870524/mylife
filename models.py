@@ -18,6 +18,7 @@ class PersonInput:
     city: str = ""
     state: str = ""
     zip_code: str = ""
+    age: str = ""
     validation_error: str = ""
 
     @property
@@ -47,6 +48,8 @@ class ProfileResult:
     full_name: str = ""
     age: str = ""
     birthday: str = ""
+    gender: str = ""
+    zodiac: str = ""
     location: str = ""
     former_names: str = ""
     result_summary: str = ""
@@ -61,6 +64,8 @@ class ProfileResult:
             "full_name": self.full_name,
             "age": self.age,
             "birthday": self.birthday,
+            "gender": self.gender,
+            "zodiac": self.zodiac,
             "location": self.location,
             "former_names": self.former_names,
             "profile_url": self.profile_url,

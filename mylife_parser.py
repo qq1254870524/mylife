@@ -13,6 +13,7 @@ from models import ProfileResult, SearchResult
 PROFILE_PATH_RE = re.compile(r"^/[a-z0-9_-]+/[ce]\d+/?$", re.I)
 AGE_RE = re.compile(r"\b(?:Age\s*)?(\d{1,3})\s*(?:years?\s*old|yrs?\.?\s*old)?\b", re.I)
 MONTH = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
+ZODIAC = r"(?:Aries|Taurus|Gemini|Cancer|Leo|Virgo|Libra|Scorpio|Sagittarius|Capricorn|Aquarius|Pisces)"
 BIRTHDAY_PATTERNS = (
     re.compile(rf"\b(?:Birthday|Date\s+of\s+Birth|Born(?:\s+on)?)\s*[:\-]?\s*({MONTH}\s+\d{{1,2}}(?:,\s*\d{{4}})?)", re.I),
     re.compile(r"\b(?:Birthday|Date\s+of\s+Birth|Born(?:\s+on)?)\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)", re.I),
@@ -61,12 +62,26 @@ def _card_for(anchor: Tag) -> Tag:
 
 def _name_from(anchor: Tag, card_text: str) -> str:
     text = _clean_text(anchor.get_text(" ", strip=True))
+    text = re.sub(r",\s*\d{1,3}\b.*$", "", text)
     text = re.sub(r"\s+\d(?:\.\d+)?/5\s*$", "", text)
     text = re.sub(r"\s+View\s+Profile.*$", "", text, flags=re.I)
     if 2 <= len(text.split()) <= 8 and not re.search(r"search|view|report|reputation", text, re.I):
         return text
     match = re.search(r"(?:Name\s*[:\-]\s*)?([A-Z][A-Za-z'\-.]+(?:\s+[A-Z][A-Za-z'\-.]+){1,4})", card_text)
     return match.group(1) if match else ""
+
+
+def extract_age(text: str) -> str:
+    clean = _clean_text(text)
+    for pattern in (
+        re.compile(r"\bAge\s*[:\-]?\s*(\d{1,3})\b", re.I),
+        re.compile(r",\s*(\d{1,3})\b"),
+        re.compile(r"\b(\d{1,3})\s*(?:years?\s*old|yrs?\.?\s*old)\b", re.I),
+    ):
+        match = pattern.search(clean)
+        if match and 0 < int(match.group(1)) < 125:
+            return str(int(match.group(1)))
+    return ""
 
 
 def _field(text: str, labels: str) -> str:
@@ -85,12 +100,12 @@ def parse_search_results(html: str, base_url: str) -> tuple[list[SearchResult], 
         seen.add(profile_url)
         card = _card_for(anchor)
         card_text = _clean_text(card.get_text(" ", strip=True))
-        age_match = re.search(r"\bAge\s*[:\-]?\s*(\d{1,3})\b", card_text, re.I)
+        age = extract_age(card_text)
         results.append(
             SearchResult(
                 profile_url=profile_url,
                 full_name=_name_from(anchor, card_text),
-                age=age_match.group(1) if age_match else "",
+                age=age,
                 location=_field(card_text, r"Lives?\s+in|Location|Current\s+City"),
                 former_names=_field(card_text, r"Aliases?|Former\s+Names?|Also\s+Known\s+As"),
                 result_summary=card_text[:1000],
@@ -118,26 +133,62 @@ def extract_birthday(text: str) -> str:
     return ""
 
 
+def extract_gender(html: str, text: str = "") -> str:
+    soup = BeautifulSoup(html or "", "html.parser")
+    clean = _clean_text(text or soup.get_text(" ", strip=True))
+    match = re.search(r"\b(?:Gender|Sex)\s*[:\-]?\s*(Female|Male|Non[- ]?binary)\b", clean, re.I)
+    if match:
+        return match.group(1).replace("-", " ").title()
+    for span in soup.find_all("span"):
+        value = _clean_text(span.get_text(" ", strip=True))
+        if re.fullmatch(r"Female|Male|Non[- ]?binary", value, re.I):
+            return value.replace("-", " ").title()
+    return ""
+
+
+def extract_zodiac(html: str, text: str = "") -> str:
+    soup = BeautifulSoup(html or "", "html.parser")
+    for node in soup.find_all(["font", "span", "div"]):
+        value = _clean_text(node.get_text(" ", strip=True))
+        match = re.fullmatch(rf"({ZODIAC})(?:\s*(\([^)]{{3,80}}\)))?", value, re.I)
+        if match:
+            sign = match.group(1).title()
+            return f"{sign} {match.group(2)}" if match.group(2) else sign
+    clean = _clean_text(text or soup.get_text(" ", strip=True))
+    match = re.search(rf"\b({ZODIAC})(?:\s*(\([^)]{{3,80}}\)))?", clean, re.I)
+    if not match:
+        return ""
+    sign = match.group(1).title()
+    return f"{sign} {match.group(2)}" if match.group(2) else sign
+
+
 def parse_profile_html(html: str, seed: SearchResult, result_index: int, strategy: str) -> ProfileResult:
     soup = BeautifulSoup(html or "", "html.parser")
     text = _clean_text(soup.get_text(" ", strip=True))
     heading = soup.find(["h1", "h2"])
-    full_name = _clean_text(heading.get_text(" ", strip=True)) if heading else seed.full_name
+    heading_text = _clean_text(heading.get_text(" ", strip=True)) if heading else ""
+    full_name = heading_text or seed.full_name
+    full_name = re.sub(r",\s*\d{1,3}\b.*$", "", full_name)
     full_name = re.sub(r"\s+(?:Reputation|Profile|Background).*$", "", full_name, flags=re.I)
-    age_match = re.search(r"\bAge\s*[:\-]?\s*(\d{1,3})\b", text, re.I)
+    age = extract_age(heading_text) or extract_age(text) or seed.age
     location = _field(text[:8000], r"Lives?\s+in|Current\s+Address|Location") or seed.location
     former_names = _field(text[:8000], r"Aliases?|Former\s+Names?|Also\s+Known\s+As") or seed.former_names
     birthday = extract_birthday(text)
+    gender = extract_gender(html, text)
+    zodiac = extract_zodiac(html, text)
     return ProfileResult(
         result_index=result_index,
         profile_url=seed.profile_url,
         full_name=full_name or seed.full_name,
-        age=age_match.group(1) if age_match else seed.age,
+        age=age,
         birthday=birthday,
+        gender=gender,
+        zodiac=zodiac,
         location=location,
         former_names=former_names,
         result_summary=seed.result_summary,
-        profile_summary=text[:4000],
+        # 身份匹配模块需要读取页面后段的电话和曾用地址；数据库保留到 20K 字符，CSV 不输出此字段。
+        profile_summary=text[:20000],
         query_strategy=strategy,
         message="" if birthday else "详情页未公开生日",
     )

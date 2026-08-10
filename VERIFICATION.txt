@@ -1,113 +1,66 @@
-CHANGED_BRANCH: main
-CHANGED_FIELDS: launcher_crlf_bytes+git_cmd_no_text_normalization+quoted_environment_assignment+preserved_exit_code
+MyLife v1.1.0 verification record
 
-ARTIFACT_PATHS:
+CHANGED_BRANCH: main
+CHANGED_FIELDS: age_tiered_multi_signal_identity_match+birthday_gender_zodiac_output+location_first_name_fallback+detail_x_then_back+source_row_rebuild+counted_csv_replay+runtime_health_devtools+proxy_channel_refresh
+BASE_COMMIT: 24588fa8d50d2fbd5611d9a040b9c0452966ebb5
+ORIGINAL_HASH_RECORD: C:\Users\zhang\Desktop\mylife\verification\original_hashes.sha256
+DESIGN_FILE_SHA256_UNCHANGED: 8588065E7D5F193A614CF1439417EF7CFB15C5450702F0A7BE86052B5918D94A
+TURNSTILE_MODULE_SHA256_UNCHANGED: BEA2D6F251594CABDF5748FC24A188D18DF1DA9E8AB93D5394D4F1637B046654
+
+FOUR_ARTIFACTS:
 MODIFIED_FILE: C:\Users\zhang\Desktop\mylife\MODIFIED_FILE
 DIFF_FILE: C:\Users\zhang\Desktop\mylife\DIFF_FILE
-VERIFICATION: C:\Users\zhang\Desktop\mylife\VERIFICATION.txt
-ROLLBACK: C:\Users\zhang\Desktop\mylife\ROLLBACK.sh
-
-ORIGINAL_V1.0.0_LAUNCHER:
-PATH: C:\Users\zhang\Desktop\mylife\启动MyLife正式版.cmd
-SHA256: 64837F9A1477162492D59D571839DC17C9C1D7264C3A4B10DCBC2D1C70FB1352
-BYTES: 283
-LINE_ENDINGS: CRLF=0 LF=16 LONE_LF=16 BOM=False
+VERIFICATION.txt: C:\Users\zhang\Desktop\mylife\VERIFICATION.txt
+ROLLBACK.sh: C:\Users\zhang\Desktop\mylife\ROLLBACK.sh
 
 BASELINE:
-COMMAND: cmd.exe /d /c 'echo.| call "C:\Users\zhang\Desktop\mylife\启动MyLife正式版.cmd"'
-INPUT: v1.0.0 正式目录中的纯 LF 启动器；向 pause 输入一个换行。
-LITERAL_OUTPUT:
-Press any key to continue . . .
-'tlocal' is not recognized as an internal or external command,
-operable program or batch file.
-'PYTHONDONTWRITEBYTECODE' is not recognized as an internal or external command,
-operable program or batch file.
-'p.py' is not recognized as an internal or external command,
-operable program or batch file.
-'to' is not recognized as an internal or external command,
-operable program or batch file.
-'�动失败，错误码：9009' is not recognized as an internal or external command,
-operable program or batch file.
-RESULT: exit status 1；cmd.exe 将纯 LF 批处理错位解析，GUI 未启动。
-
-MODIFIED_LAUNCHER:
-COMMAND: cmd.exe /d /c 'call "C:\Users\zhang\Desktop\codex_tmp\mylife_launcher_fix_20260811\启动MyLife正式版.cmd"'
-INPUT: v1.0.1 CRLF 启动器；在临时副本中把 main.py 替换成只输出环境变量的探针，运行后立即按原 SHA256 恢复 main.py。
-LITERAL_OUTPUT:
-依赖检查通过，已安装项全部跳过。
-MAIN_PROBE_OK 1
-LAUNCHER_PARSE_EXIT=0
-RESULT: exit status 0；bootstrap.py 和 main.py 两条命令均被完整执行，PYTHONDONTWRITEBYTECODE=1。
-
-LINE_ENDING_TEST:
-COMMAND: python -B -（读取启动器原始字节并统计换行）
-INPUT: v1.0.1 启动器。
-LITERAL_OUTPUT: LINE_ENDINGS CRLF=19 LF=19 LONE_LF=0 BOM=False
-RESULT: exit status 0；SHA256=C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF。
-
-MODIFIED:
-COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; py -3 -B -m unittest discover -s tests -v
-INPUT: 未修改的 Python 功能模块与既有 tests 中 18 个测试。
-LITERAL_OUTPUT:
-test_late_widget_poll_click_and_pass (test_cloudflare_handler.CloudflareHandlerTests.test_late_widget_poll_click_and_pass) ... ok
-test_full_pipeline_realtime_output_then_single_rebuild (test_controller_offline.ControllerOfflineTests.test_full_pipeline_realtime_output_then_single_rebuild) ... ok
-test_proxy_thread_limit_validation (test_controller_offline.ControllerOfflineTests.test_proxy_thread_limit_validation) ... ok
-test_wal_single_writer_and_realtime_bom_csv (test_database_output.DatabaseOutputTests.test_wal_single_writer_and_realtime_bom_csv) ... ok
-test_csv_arbitrary_order_and_extra_columns (test_input_loader.InputLoaderTests.test_csv_arbitrary_order_and_extra_columns) ... ok
-test_email_without_name_is_invalid_not_misclassified (test_input_loader.InputLoaderTests.test_email_without_name_is_invalid_not_misclassified) ... ok
-test_xlsx_full_name_and_location (test_input_loader.InputLoaderTests.test_xlsx_full_name_and_location) ... ok
-test_profile_birthday (test_parser.ParserTests.test_profile_birthday) ... ok
-test_profile_without_public_birthday_is_explicit (test_parser.ParserTests.test_profile_without_public_birthday_is_explicit) ... ok
-test_search_results_deduplicate_and_next (test_parser.ParserTests.test_search_results_deduplicate_and_next) ... ok
-test_search_url_location_then_name (test_parser.ParserTests.test_search_url_location_then_name) ... ok
-test_load_lines_from_design (test_proxy_pool.ProxyPoolTests.test_load_lines_from_design) ... ok
-test_parse_combined_proxy_line (test_proxy_pool.ProxyPoolTests.test_parse_combined_proxy_line) ... ok
-test_refresh_cooldown (test_proxy_pool.ProxyPoolTests.test_refresh_cooldown) ... ok
-test_authenticated_remote_and_local_no_auth_relay (test_socks_bridge.SocksBridgeTests.test_authenticated_remote_and_local_no_auth_relay) ... ok
-test_csv_is_rebuilt_once_by_first_column (test_source_rewriter.SourceRewriterTests.test_csv_is_rebuilt_once_by_first_column) ... ok
-test_xlsx_rebuild_preserves_unprocessed_rows (test_source_rewriter.SourceRewriterTests.test_xlsx_rebuild_preserves_unprocessed_rows) ... ok
-test_existing_module_token_and_detection (test_turnstile_harvester.TurnstileHarvesterTests.test_existing_module_token_and_detection) ... ok
-
+COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; python -B -m unittest discover -s tests -v
+INPUT: C:\Users\zhang\Desktop\codex_tmp\mylife_baseline_v101_20260811_0238 @ 24588fa8d50d2fbd5611d9a040b9c0452966ebb5
+LITERAL_RESULT:
 ----------------------------------------------------------------------
-Ran 18 tests in 1.853s
+Ran 18 tests in 0.863s
 
 OK
-RESULT: exit status 0
+EXIT_STATUS: 0
+BASELINE_BEHAVIOR: v1.0.1 launcher + v1.0.0 collection; output had no age-aware unique identity matching and no gender/zodiac columns.
 
-RELEASE_ARCHIVE_TEST:
-COMMAND: git archive --format=zip HEAD；随后用 Python zipfile 读取 `启动MyLife正式版.cmd` 原始字节。
-INPUT: v1.0.1 源码提交；后续仅修订验证文档，启动器字节不变。
-LITERAL_OUTPUT:
-COMMIT_LAUNCHER SHA256=C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF CRLF=19 LF=19 LONE_LF=0
-ARCHIVE_LAUNCHER SHA256=C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF CRLF=19 LF=19 LONE_LF=0
-RESULT: exit status 0；Git 提交和 ZIP 内启动器字节完全相同。
+MODIFIED:
+COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; python -B -m unittest discover -s tests -v
+INPUT: C:\Users\zhang\Desktop\codex_tmp\mylife_monitor_fix_20260811 (v1.1.0 modified source)
+LITERAL_RESULT:
+----------------------------------------------------------------------
+Ran 35 tests in 1.347
 
-SELF_CHECK:
-COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; py -3 -B main.py --check
-INPUT: v1.0.1 源码和当前 Python 环境。
-LITERAL_OUTPUT:
+OK
+EXIT_STATUS: 0
+COMMAND_2: $env:PYTHONDONTWRITEBYTECODE='1'; python -B main.py --check
+INPUT_2: C:\Users\zhang\Desktop\codex_tmp\mylife_monitor_fix_20260811
+LITERAL_RESULT_2:
 依赖检查通过，已安装项全部跳过。
 SELF_CHECK_OK
-RESULT: exit status 0
+EXIT_STATUS_2: 0
+MODIFIED_BEHAVIOR: location search runs first and name-only runs only after zero location results; all candidates from the selected strategy are age-tiered and scored with name, former name, phone, email, current/past address, ZIP, street number/prefix, city/state, relatives and associates; CSV appends only 生日/性别/星座.
+
+LIVE_BROWSER:
+COMMAND: python -B - [one-row direct MyLife AppController probe, 小窗口, max_search_pages=3]
+INPUT: one real previously successful row copied only into C:\Users\zhang\Desktop\codex_tmp\mylife_monitor_fix_20260811\live_location_only_final\sample.csv
+LITERAL_RESULT:
+LIVE_RESULT {"status": "已完成", "rows": 1, "location_searches": 1, "name_only_searches": 0, "return_to_list": 1, "return_fallback_error": 0, "multi_signal_log": 1, "final_fields": ["生日", "性别", "星座"], "birthday": true, "gender": true, "zodiac": true, "input_remaining": 0, "runtime_exists": false}
+EXIT_STATUS: 0
+LIVE_BEHAVIOR: Cloudflare passed; one location-search candidate was collected; visible X was clicked; browser returned one step to the search list; exactly one output row contained birthday, gender and zodiac; clean completion removed the probe input row and runtime cache.
 
 ROLLBACK:
-COMMAND: C:\Program Files\Git\bin\bash.exe ROLLBACK.sh C:\Users\zhang\Desktop\codex_tmp\mylife_launcher_rollback_copy_20260811
-INPUT: v1.0.1 修改版完整副本及其 Git 历史。
-LITERAL_OUTPUT: ROLLBACK_OK base=9139968 files=8 launcher_sha256=64837F9A1477162492D59D571839DC17C9C1D7264C3A4B10DCBC2D1C70FB1352 restored_behavior=lf_only_v1.0.0
-RESULT: exit status 0
+COMMAND: bash ROLLBACK.sh C:/Users/zhang/Desktop/codex_tmp/mylife_rollback_verify_20260811
+INPUT: independent clone of final v1.1.0 commit
+LITERAL_RESULT:
+ROLLBACK_OK base=24588fa files=24 version_sha256=8740E1202A509450D8164DECBB30E06C5D9E307209FE1C9D3916E8A59E52798C restored_behavior=v1.0.1_launcher_and_v1.0.0_collection
+EXIT_STATUS: 0
+COMMAND_2: $env:PYTHONDONTWRITEBYTECODE='1'; python -B -m unittest discover -s tests -v
+INPUT_2: same rollback clone after ROLLBACK.sh
+LITERAL_RESULT_2:
+----------------------------------------------------------------------
+Ran 18 tests in 1.832
 
-ROLLBACK_TEST:
-COMMAND: python -B -（比较回滚副本工作树与 9139968、检查启动器 SHA256 和换行）
-INPUT: 已执行回滚的另一份副本。
-LITERAL_OUTPUT:
-ROLLBACK_TREE_EXCEPT_SCRIPT_MATCH=True
-ROLLBACK_LAUNCHER SHA256=64837F9A1477162492D59D571839DC17C9C1D7264C3A4B10DCBC2D1C70FB1352 CRLF=0 LF=16 LONE_LF=16
-ROLLBACK_ADDED_FILES_PRESENT gitattributes=False release_notes=False
-RESULT: exit status 0
-
-RESTORED_BEHAVIOR_STATUS: 回滚副本除正在执行且需保留的 ROLLBACK.sh 外，其余热修复文件与 v1.0.0 提交 9139968 完全匹配；启动器恢复原始 SHA256 和纯 LF 状态，重现 v1.0.0 的启动器行为；正式工作副本继续保留 CRLF 修复。
-
-UNCHANGED_FILES:
-设计思路.txt SHA256=8588065E7D5F193A614CF1439417EF7CFB15C5450702F0A7BE86052B5918D94A；未改动。
-Python 功能模块 main.py、bootstrap.py、browser_worker.py、cloudflare_handler.py、controller.py、database.py、gui.py、input_loader.py、models.py、mylife_parser.py、output_writer.py、proxy_pool.py、socks_bridge.py、source_rewriter.py、turnstile_harvester.py 均未做功能修改；version.py 仅更新版本号。
-E:\truepeoplesearch 与 E:\txfgsales 继续保持只读。
+OK
+EXIT_STATUS_2: 0
+RESTORED_BEHAVIOR_STATUS: version.py restored to SHA256 8740E1202A509450D8164DECBB30E06C5D9E307209FE1C9D3916E8A59E52798C (v1.0.1); identity_matcher.py/runtime_monitor.py removed; baseline 18-test behavior restored; formal MODIFIED_FILE remains changed.

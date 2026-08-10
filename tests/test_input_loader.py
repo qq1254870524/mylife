@@ -49,6 +49,26 @@ class InputLoaderTests(unittest.TestCase):
             _, people = load_people(path)
             self.assertTrue(people[0].validation_error)
 
+    def test_age_column_is_normalized(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "people.csv"
+            path.write_text("first_name,last_name,age\nJane,Doe,42.0\n", encoding="utf-8")
+            _, people = load_people(path)
+            self.assertEqual(people[0].age, "42")
+
+    def test_current_address_supplies_zip_when_city_state_column_has_no_zip(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "people.csv"
+            path.write_text(
+                "first_name,last_name,address,current_address\n"
+                "Jane,Doe,Denver CO,1450 Pearl St Denver CO 80202\n",
+                encoding="utf-8",
+            )
+            _, people = load_people(path)
+            self.assertEqual(people[0].city, "Denver")
+            self.assertEqual(people[0].state, "CO")
+            self.assertEqual(people[0].zip_code, "80202")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -38,7 +38,7 @@ class DatabaseOutputTests(unittest.TestCase):
                 "result",
                 job_id,
                 person,
-                ProfileResult(1, "https://www.mylife.com/jane-doe/e1", full_name="Jane Doe", birthday="March 7, 1984"),
+                ProfileResult(1, "https://www.mylife.com/jane-doe/e1", full_name="Jane Doe", birthday="March 7, 1984", gender="Female", zodiac="Pisces (February 19 - March 20)"),
             )
             writer.put("done", job_id, "ok")
             writer.flush()
@@ -47,12 +47,38 @@ class DatabaseOutputTests(unittest.TestCase):
             with csv_writer.path.open("r", encoding="utf-8-sig", newline="") as handle:
                 rows = list(csv.DictReader(handle))
             self.assertEqual(rows[0]["name"], "Jane Doe")
-            self.assertEqual(rows[0]["mylife_birthday"], "March 7, 1984")
+            self.assertEqual(list(rows[0])[-3:], ["生日", "性别", "星座"])
+            self.assertEqual(rows[0]["生日"], "March 7, 1984")
+            self.assertEqual(rows[0]["性别"], "Female")
+            self.assertEqual(rows[0]["星座"], "Pisces (February 19 - March 20)")
+            replayed = database.existing_results(input_path)
+            self.assertEqual(len(replayed), 1)
+            self.assertFalse(csv_writer.append(*replayed[0], restoring=True))
             writer.close()
             with closing(sqlite3.connect(database.path)) as connection:
                 mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
             self.assertEqual(mode.lower(), "wal")
             self.assertEqual(database.summary(input_path).get("done"), 1)
+
+    def test_two_identical_source_rows_are_preserved_and_replay_is_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            input_path = root / "same.csv"
+            input_path.write_text("name\nJane Doe\nJane Doe\n", encoding="utf-8")
+            original = {"name": "Jane Doe"}
+            result = {"birthday": "01/01/1980", "gender": "Female", "zodiac": "Capricorn"}
+            writer = RealtimeCsvWriter(root, input_path, ["name"])
+            self.assertTrue(writer.append(original, result, "t1"))
+            self.assertTrue(writer.append(original, result, "t2"))
+            writer.close()
+
+            replay = RealtimeCsvWriter(root, input_path, ["name"])
+            self.assertFalse(replay.append(original, result, "t1", restoring=True))
+            self.assertFalse(replay.append(original, result, "t2", restoring=True))
+            self.assertTrue(replay.append(original, result, "t3", restoring=True))
+            replay.close()
+            with (root / "same_MyLife结果.csv").open("r", encoding="utf-8-sig", newline="") as handle:
+                self.assertEqual(len(list(csv.DictReader(handle))), 3)
 
 
 if __name__ == "__main__":

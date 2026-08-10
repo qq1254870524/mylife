@@ -17,7 +17,9 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "city": ("city", "城市", "town"),
     "state": ("state", "州", "省", "province"),
     "zip_code": ("zip", "zipcode", "zip_code", "zip code", "postalcode", "邮编"),
+    "age": ("age", "年龄", "年纪"),
     "location": ("location", "address", "地址", "地区", "citystatezip"),
+    "current_address": ("currentaddress", "current_address", "current address", "当前地址", "现地址"),
     "query": ("query", "search", "keyword", "关键词", "查询", "搜索资料"),
 }
 
@@ -142,6 +144,14 @@ def _looks_unsupported_query(value: str) -> bool:
     return "@" in value or (compact.isdigit() and len(compact) >= 7)
 
 
+def _normalize_age(value: str) -> str:
+    match = re.fullmatch(r"\s*(\d{1,3})(?:\.0+)?\s*", value or "")
+    if not match:
+        return ""
+    age = int(match.group(1))
+    return str(age) if 0 < age < 125 else ""
+
+
 def load_people(path: str | Path) -> tuple[list[str], list[PersonInput]]:
     source = Path(path).resolve()
     headers, raw_rows = read_rows(source)
@@ -168,12 +178,15 @@ def load_people(path: str | Path) -> tuple[list[str], list[PersonInput]]:
         city = _value(row, mapped["city"])
         state = _value(row, mapped["state"]).upper()
         zip_code = _value(row, mapped["zip_code"])
+        age = _normalize_age(_value(row, mapped["age"]))
         location = _value(row, mapped["location"])
-        if location and (not city or not state or not zip_code):
-            guessed_city, guessed_state, guessed_zip = _parse_location(location)
-            city = city or guessed_city
-            state = state or guessed_state
-            zip_code = zip_code or guessed_zip
+        current_address = _value(row, mapped["current_address"])
+        for address_value in (location, current_address):
+            if address_value and (not city or not state or not zip_code):
+                guessed_city, guessed_state, guessed_zip = _parse_location(address_value)
+                city = city or guessed_city
+                state = state or guessed_state
+                zip_code = zip_code or guessed_zip
         validation_error = ""
         if _looks_unsupported_query(query) and not (mapped["first_name"] and mapped["last_name"]):
             validation_error = "输入中没有可识别的姓名字段"
@@ -192,6 +205,7 @@ def load_people(path: str | Path) -> tuple[list[str], list[PersonInput]]:
                 city=city,
                 state=state,
                 zip_code=zip_code,
+                age=age,
                 validation_error=validation_error,
             )
         )

@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     city TEXT,
     state TEXT,
     zip_code TEXT,
+    age TEXT,
     validation_error TEXT,
     status TEXT NOT NULL DEFAULT 'pending',
     attempts INTEGER NOT NULL DEFAULT 0,
@@ -62,6 +63,9 @@ class JobDatabase:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with closing(self.connect()) as connection, connection:
             connection.executescript(SCHEMA)
+            columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(jobs)")}
+            if "age" not in columns:
+                connection.execute("ALTER TABLE jobs ADD COLUMN age TEXT")
 
     def connect(self) -> sqlite3.Connection:
         connection = sqlite3.connect(self.path, timeout=30)
@@ -79,9 +83,9 @@ class JobDatabase:
                     """
                     INSERT OR IGNORE INTO jobs (
                         source_path, source_row, first_value, headers_json, original_json,
-                        first_name, middle_name, last_name, city, state, zip_code,
+                        first_name, middle_name, last_name, city, state, zip_code, age,
                         validation_error, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(person.source_path), person.source_row, person.first_value,
@@ -89,6 +93,7 @@ class JobDatabase:
                         json.dumps(person.original, ensure_ascii=False),
                         person.first_name, person.middle_name, person.last_name,
                         person.city, person.state, person.zip_code,
+                        person.age,
                         person.validation_error, now, now,
                     ),
                 )
@@ -127,6 +132,7 @@ class JobDatabase:
                         city=row["city"] or "",
                         state=row["state"] or "",
                         zip_code=row["zip_code"] or "",
+                        age=row["age"] or "",
                         validation_error=row["validation_error"] or "",
                     ),
                     int(row["attempts"]),
@@ -141,6 +147,40 @@ class JobDatabase:
                 (str(source_path.resolve()),),
             ).fetchall()
         return {str(row["status"]): int(row["count"]) for row in rows}
+
+    def existing_results(self, source_path: Path) -> list[tuple[dict[str, str], dict[str, Any], str]]:
+        with closing(self.connect()) as connection, connection:
+            rows = connection.execute(
+                """
+                SELECT j.original_json, r.result_json, r.created_at
+                FROM results AS r
+                JOIN jobs AS j ON j.id=r.job_id
+                WHERE j.source_path=?
+                ORDER BY j.source_row, r.result_index, r.id
+                """,
+                (str(source_path.resolve()),),
+            ).fetchall()
+        return [
+            (json.loads(row["original_json"]), json.loads(row["result_json"]), str(row["created_at"]))
+            for row in rows
+        ]
+
+    def done_source_rows(self, source_path: Path) -> set[int]:
+        with closing(self.connect()) as connection, connection:
+            rows = connection.execute(
+                "SELECT source_row FROM jobs WHERE source_path=? AND status='done'",
+                (str(source_path.resolve()),),
+            ).fetchall()
+        return {int(row["source_row"]) for row in rows}
+
+    def delete_source(self, source_path: Path) -> int:
+        with closing(self.connect()) as connection, connection:
+            cursor = connection.execute(
+                "DELETE FROM jobs WHERE source_path=?",
+                (str(source_path.resolve()),),
+            )
+            connection.commit()
+        return int(cursor.rowcount)
 
 
 class DatabaseWriter(threading.Thread):

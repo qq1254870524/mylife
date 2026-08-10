@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from controller import AppController
+from controller import AppController, _is_proxy_network_error
 from models import ProfileResult, RunConfig
 
 
@@ -19,8 +19,7 @@ class FakeBrowserSession:
 
     def process(self, person: object) -> list[ProfileResult]:
         return [
-            ProfileResult(1, "https://www.mylife.com/jane-doe/e1", full_name="Jane Doe", birthday="March 7, 1984"),
-            ProfileResult(2, "https://www.mylife.com/jane-doe/e2", full_name="Jane Doe", birthday="April 8, 1985"),
+            ProfileResult(1, "https://www.mylife.com/jane-doe/e1", full_name="Jane Doe", birthday="March 7, 1984", gender="Female", zodiac="Pisces (February 19 - March 20)"),
         ]
 
     def clear_person_data(self) -> None:
@@ -34,6 +33,10 @@ class FakeBrowserSession:
 
 
 class ControllerOfflineTests(unittest.TestCase):
+    def test_proxy_browser_connection_error_is_detected_for_refresh(self) -> None:
+        self.assertTrue(_is_proxy_network_error("Page.goto: net::ERR_SOCKS_CONNECTION_FAILED"))
+        self.assertFalse(_is_proxy_network_error("selector not found"))
+
     def test_full_pipeline_realtime_output_then_single_rebuild(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -47,9 +50,12 @@ class ControllerOfflineTests(unittest.TestCase):
             result_path = output / "people_MyLife结果.csv"
             with result_path.open("r", encoding="utf-8-sig", newline="") as handle:
                 rows = list(csv.DictReader(handle))
-            self.assertEqual(len(rows), 2)
+            self.assertEqual(len(rows), 1)
             self.assertEqual(rows[0]["note"], "keep")
-            self.assertEqual(rows[1]["mylife_birthday"], "April 8, 1985")
+            self.assertEqual(list(rows[0])[-3:], ["生日", "性别", "星座"])
+            self.assertEqual(rows[0]["生日"], "March 7, 1984")
+            self.assertEqual(rows[0]["性别"], "Female")
+            self.assertEqual(rows[0]["星座"], "Pisces (February 19 - March 20)")
             with source.open("r", encoding="utf-8-sig", newline="") as handle:
                 remaining = list(csv.reader(handle))
             self.assertEqual(remaining, [["first_name", "last_name", "note"]])
