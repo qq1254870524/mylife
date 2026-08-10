@@ -356,7 +356,21 @@ class AppController:
                 rebuilt_writer.close()
                 self._log(f"跨输入行强身份信号补充 {updated} 条结果，已从 SQLite 重建实时 CSV")
             if self.stop_event.is_set():
-                self._log("任务已停止；未执行输入文件重建，已保留数据库断点")
+                if self._defer_input_rewrite:
+                    # “停止”同样先等待全部 worker join 并关闭数据库写线程；此时才对
+                    # XLSX/XLSM 执行本轮唯一一次批量删行，未完成任务仍保留在断点库。
+                    stopped_removed = self.input_rewriter.remove_people(
+                        self.database.done_people(self.config.input_file)
+                    )
+                    self._log(
+                        f"任务已停止；全部线程已结束，已一次性重建 XLSX/XLSM 并删除 "
+                        f"{stopped_removed} 条明确结果；未完成行和数据库断点已保留"
+                    )
+                else:
+                    self._log(
+                        "任务已停止；CSV/TXT 的明确结果行已在提交后实时删除；"
+                        "未完成行和数据库断点已保留"
+                    )
                 self._emit_progress("已停止")
                 self._final_status = "已停止"
             else:

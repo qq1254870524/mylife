@@ -46,6 +46,17 @@ class FakeBrowserSession:
         self.page = object()
 
 
+class StoppingFakeBrowserSession(FakeBrowserSession):
+    def __init__(self, **kwargs: object) -> None:
+        super().__init__(**kwargs)
+        self.stop_event = kwargs["stop_event"]
+
+    def process(self, person: object) -> list[ProfileResult]:
+        results = super().process(person)
+        self.stop_event.set()
+        return results
+
+
 class ControllerOfflineTests(unittest.TestCase):
     def test_proxy_browser_connection_error_is_detected_for_refresh(self) -> None:
         self.assertTrue(_is_proxy_network_error("Page.goto: net::ERR_SOCKS_CONNECTION_FAILED"))
@@ -104,6 +115,33 @@ class ControllerOfflineTests(unittest.TestCase):
             workbook = openpyxl.load_workbook(source, read_only=True, data_only=True)
             try:
                 self.assertEqual(list(workbook.active.iter_rows(values_only=True)), [("first_name", "last_name", "note")])
+                self.assertEqual(list(workbook["keep"].iter_rows(values_only=True)), [("other sheet", "must stay")])
+            finally:
+                workbook.close()
+
+    def test_stopped_xlsx_waits_for_worker_then_bulk_deletes_completed_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "people.xlsx"
+            workbook = openpyxl.Workbook()
+            workbook.active.append(["first_name", "last_name", "note"])
+            workbook.active.append(["Jane", "Doe", "done"])
+            workbook.active.append(["John", "Doe", "pending"])
+            workbook.create_sheet("keep").append(["other sheet", "must stay"])
+            workbook.save(source)
+            workbook.close()
+            controller = AppController(RunConfig(source, root / "output", thread_count=1, browser_mode="无头"))
+            StoppingFakeBrowserSession.observed_input_counts = []
+            with patch("controller.BrowserSession", StoppingFakeBrowserSession):
+                controller.run()
+            self.assertEqual(StoppingFakeBrowserSession.observed_input_counts, [2])
+            self.assertEqual(controller._final_status, "已停止")
+            workbook = openpyxl.load_workbook(source, read_only=True, data_only=True)
+            try:
+                self.assertEqual(
+                    list(workbook.active.iter_rows(values_only=True)),
+                    [("first_name", "last_name", "note"), ("John", "Doe", "pending")],
+                )
                 self.assertEqual(list(workbook["keep"].iter_rows(values_only=True)), [("other sheet", "must stay")])
             finally:
                 workbook.close()
