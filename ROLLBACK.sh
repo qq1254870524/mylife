@@ -15,7 +15,7 @@ from pathlib import Path
 
 root = Path(sys.argv[1]).resolve()
 base_commit = "24588fa8d50d2fbd5611d9a040b9c0452966ebb5"
-expected_modified_version = "1.1.0"
+expected_modified_version = "1.1.1"
 expected_restored_hash = "8740E1202A509450D8164DECBB30E06C5D9E307209FE1C9D3916E8A59E52798C"
 preserve = {"ROLLBACK.sh", "VERIFICATION.txt", "MODIFIED_FILE", "DIFF_FILE"}
 
@@ -23,7 +23,7 @@ if not (root / ".git").exists():
     raise SystemExit(f"ROLLBACK_ABORT missing git metadata: {root}")
 version_text = (root / "version.py").read_text(encoding="utf-8")
 if expected_modified_version not in version_text:
-    raise SystemExit("ROLLBACK_ABORT expected v1.1.0 source was not found")
+    raise SystemExit("ROLLBACK_ABORT expected v1.1.1 source was not found")
 
 def git_bytes(*args: str) -> bytes:
     process = subprocess.run(

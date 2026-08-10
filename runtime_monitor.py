@@ -47,22 +47,28 @@ class RuntimeHealthMonitor(threading.Thread):
             "blank_birthdays": 0,
             "genders": 0,
             "zodiacs": 0,
+            "remarks": 0,
             "bytes": path.stat().st_size if path.is_file() else 0,
         }
         if not path.is_file() or path.stat().st_size == 0:
             return audit
+        unique_birthdays: set[str] = set()
         with path.open("r", encoding="utf-8-sig", newline="") as handle:
             for row in csv.DictReader(handle):
                 audit["rows"] = int(audit["rows"]) + 1
-                if str(row.get("生日", "")).strip():
+                birthday = str(row.get("生日", "")).strip()
+                if birthday:
                     audit["birthdays"] = int(audit["birthdays"]) + 1
-                    audit["unique_birthdays"] = int(audit["unique_birthdays"]) + 1
+                    unique_birthdays.add(birthday)
                 else:
                     audit["blank_birthdays"] = int(audit["blank_birthdays"]) + 1
                 if str(row.get("性别", "")).strip():
                     audit["genders"] = int(audit["genders"]) + 1
                 if str(row.get("星座", "")).strip():
                     audit["zodiacs"] = int(audit["zodiacs"]) + 1
+                if str(row.get("备注原因", "")).strip():
+                    audit["remarks"] = int(audit["remarks"]) + 1
+        audit["unique_birthdays"] = len(unique_birthdays)
         return audit
 
     def snapshot(self) -> dict[str, object]:

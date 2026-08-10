@@ -197,7 +197,8 @@ class MainWindow:
                 f"总数 {state.get('total', 0)}｜完成 {state.get('completed', 0)}｜"
                 f"待处理 {state.get('pending', 0)}｜失败 {state.get('failed', 0)}｜"
                 f"CSV {state.get('output_rows', 0)}｜生日 {state.get('birthdays', 0)}｜"
-                f"性别 {state.get('genders', 0)}｜星座 {state.get('zodiacs', 0)}"
+                f"性别 {state.get('genders', 0)}｜星座 {state.get('zodiacs', 0)}｜"
+                f"备注 {state.get('remarks', 0)}"
             )
             output = str(state.get("output", ""))
             self.output_status_var.set(f"实时 CSV：{output}" if output else "")

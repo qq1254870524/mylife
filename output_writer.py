@@ -8,8 +8,9 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from remark_builder import build_result_remark
 
-RESULT_FIELDS = ["生日", "性别", "星座"]
+RESULT_FIELDS = ["生日", "性别", "星座", "备注原因"]
 
 
 class RealtimeCsvWriter:
@@ -33,6 +34,7 @@ class RealtimeCsvWriter:
         row["生日"] = result.get("birthday", "")
         row["性别"] = result.get("gender", "")
         row["星座"] = result.get("zodiac", "")
+        row["备注原因"] = build_result_remark(result)
         return row
 
     def _signature(self, row: dict[str, Any]) -> str:

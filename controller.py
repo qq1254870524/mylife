@@ -83,6 +83,7 @@ class AppController:
             payload["birthdays"] = int(csv_audit.get("birthdays", 0))
             payload["genders"] = int(csv_audit.get("genders", 0))
             payload["zodiacs"] = int(csv_audit.get("zodiacs", 0))
+            payload["remarks"] = int(csv_audit.get("remarks", 0))
         self.progress(payload)
 
     def start_async(self) -> None:

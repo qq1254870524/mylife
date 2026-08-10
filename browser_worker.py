@@ -383,28 +383,17 @@ class BrowserSession:
         return False
 
     def _return_to_search_list(self, search_url: str) -> None:
-        """按用户指定动作：关闭详情弹层，再后退一步回搜索列表。"""
+        """关闭详情弹层后用固定 GET 地址回列表，绕开历史 POST 的 ERR_CACHE_MISS。"""
         self._close_visible_overlay()
-        try:
-            self.page.go_back(wait_until="commit", timeout=60_000)
-            self._pause(0.5, 1.2)
-            self._handle_cloudflare()
-        except Exception as exc:
-            self.log(f"线程{self.worker_number} 后退搜索列表首次失败，准备直达兜底：{type(exc).__name__}: {exc}")
-            try:
-                self.page.wait_for_timeout(1_200)
-            except Exception:
-                pass
         if "pub-multisearch.pubview" not in str(self.page.url or ""):
             try:
-                self.page.goto("about:blank", wait_until="commit", timeout=15_000)
                 self._navigate(search_url)
             except Exception as exc:
                 # 详情数据已经取得，返回列表失败不应把完整候选误判为采集失败；下一候选仍可直达 URL。
-                self.log(f"线程{self.worker_number} 搜索列表直达兜底失败，保留已采集详情：{type(exc).__name__}: {exc}")
+                self.log(f"线程{self.worker_number} 固定 GET 搜索列表返回失败，保留已采集详情：{type(exc).__name__}: {exc}")
                 self.capture_diagnostic("return-search-failure")
         if "pub-multisearch.pubview" in str(self.page.url or ""):
-            self.log(f"线程{self.worker_number} 已后退一步回到搜索列表页面")
+            self.log(f"线程{self.worker_number} 已通过固定 GET 搜索地址返回列表页面")
 
     def _collect_profile(self, result: SearchResult, index: int, strategy: str, search_url: str) -> ProfileResult:
         self._navigate(result.profile_url)

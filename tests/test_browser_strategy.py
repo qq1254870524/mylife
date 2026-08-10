@@ -64,6 +64,26 @@ class BrowserStrategyTests(unittest.TestCase):
         self.assertIn("searchLocation=", calls[0])
         self.assertIn("search=Jane+Doe", calls[1])
 
+    def test_return_to_list_uses_saved_get_url_without_history_back(self) -> None:
+        session = object.__new__(BrowserSession)
+        session.worker_number = 1
+        session.page = SimpleNamespace(url="https://www.mylife.com/jane-doe/e1")
+        navigated: list[str] = []
+        logged: list[str] = []
+        session._close_visible_overlay = lambda: True
+
+        def navigate(url: str) -> None:
+            navigated.append(url)
+            session.page.url = url
+
+        session._navigate = navigate
+        session.capture_diagnostic = lambda *_args, **_kwargs: None
+        session.log = logged.append
+        search_url = "https://www.mylife.com/pub-multisearch.pubview?searchFirstName=Jane"
+        session._return_to_search_list(search_url)
+        self.assertEqual(navigated, [search_url])
+        self.assertTrue(any("固定 GET" in line for line in logged))
+
 
 if __name__ == "__main__":
     unittest.main()

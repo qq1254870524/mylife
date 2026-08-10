@@ -78,10 +78,11 @@ class DatabaseOutputTests(unittest.TestCase):
             with csv_writer.path.open("r", encoding="utf-8-sig", newline="") as handle:
                 rows = list(csv.DictReader(handle))
             self.assertEqual(rows[0]["name"], "Jane Doe")
-            self.assertEqual(list(rows[0])[-3:], ["生日", "性别", "星座"])
+            self.assertEqual(list(rows[0])[-4:], ["生日", "性别", "星座", "备注原因"])
             self.assertEqual(rows[0]["生日"], "March 7, 1984")
             self.assertEqual(rows[0]["性别"], "Female")
             self.assertEqual(rows[0]["星座"], "Pisces (February 19 - March 20)")
+            self.assertIn("搜索方式：", rows[0]["备注原因"])
             replayed = database.existing_results(input_path)
             self.assertEqual(len(replayed), 1)
             self.assertFalse(csv_writer.append(*replayed[0], restoring=True))
