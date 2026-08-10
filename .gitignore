@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.tmp
+.pytest_cache/
+.coverage
+.mylife_gui_settings.json
+.mylife_runtime/
+MyLife输出/
+logs/
+*.log
+设计思路.txt
+测试文件*.xlsx
+测试文件*.csv
+verification/original_snapshot.zip
