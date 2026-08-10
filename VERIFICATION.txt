@@ -1,10 +1,10 @@
-﻿MyLife v1.1.2 verification record
+MyLife v1.1.2 verification record
 
 CHANGED_BRANCH: main
-CHANGED_FIELDS: csv_txt_realtime_explicit_result_row_deletion+xlsx_xlsm_deferred_single_pass_row_deletion+stable_resume_identity
-BASE_COMMIT: 9d374a5bf0bd81c00381352b7c2cb71d8da891f4
-ORIGINAL_CONTROLLER_SHA256: 4449BFAF311FE7F49DE47157A83E422D8B0806F2A69C4697E818E545DF94C52A
-MODIFIED_CONTROLLER_SHA256: D2536C0098902A1BF2E9B97C1996B90D3DC018765E618DE3A78C153F1763A492
+CHANGED_FIELDS: csv_txt_realtime_explicit_result_row_deletion+xlsx_xlsm_deferred_single_pass_row_deletion+stopped_worker_join_single_pass_cleanup+stable_resume_identity
+BASE_COMMIT: 628d2035526d0c21a6bc4ec40f46c25272ebb81c
+ORIGINAL_CONTROLLER_SHA256: D2536C0098902A1BF2E9B97C1996B90D3DC018765E618DE3A78C153F1763A492
+MODIFIED_CONTROLLER_SHA256: B5B371E7E67742EE868548EC5FD2FFA7477BA7BDBDEE6E16F5E590245B7CB392
 DESIGN_FILE_SHA256_PRESERVED: 38BD37877F6A6CAA399071568AD0EDE475CE73E2D170D7F83D77545CB448BFFE
 TURNSTILE_MODULE_SHA256_UNCHANGED: BEA2D6F251594CABDF5748FC24A188D18DF1DA9E8AB93D5394D4F1637B046654
 
@@ -16,63 +16,72 @@ ROLLBACK.sh: C:\Users\zhang\Desktop\mylife\ROLLBACK.sh
 
 BASELINE:
 COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; $env:PYTHONIOENCODING='utf-8'; python -B -m unittest discover -s tests -v
-INPUT: C:\Users\zhang\Desktop\codex_tmp\mylife_v112_20260811 @ 9d374a5bf0bd81c00381352b7c2cb71d8da891f4
-LITERAL_RESULT:
-----------------------------------------------------------------------
-Ran 71 tests in 2.843s
-
-OK
-EXIT_STATUS: 0
-BASELINE_BEHAVIOR: CSV/TXT/XLSX/XLSM all deleted a completed input row immediately after SQLite/CSV commit; XLSX/XLSM could therefore be rewritten while another browser thread was still processing it.
-
-MODIFIED:
-COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; $env:PYTHONIOENCODING='utf-8'; python -B -m unittest discover -s tests -v
-INPUT: C:\Users\zhang\Desktop\mylife @ 60efd03691232e9ecec6dbac797c134cb21c2857
+INPUT: C:\Users\zhang\Desktop\mylife @ 628d2035526d0c21a6bc4ec40f46c25272ebb81c
 LITERAL_RESULT:
 ----------------------------------------------------------------------
 Ran 72 tests in 3.488s
 
 OK
 EXIT_STATUS: 0
-COMMAND_2: $env:PYTHONDONTWRITEBYTECODE='1'; $env:PYTHONIOENCODING='utf-8'; python -B -m unittest tests.test_controller_offline.ControllerOfflineTests.test_xlsx_keeps_all_rows_during_processing_then_deletes_once -v
-INPUT_2: C:\Users\zhang\Desktop\mylife @ 60efd03691232e9ecec6dbac797c134cb21c2857
+BASELINE_BEHAVIOR: XLSX/XLSM stayed unchanged during processing and rebuilt once after natural completion, but the stop branch logged that no input rebuild was performed and retained completed rows.
+
+MODIFIED:
+COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; $env:PYTHONIOENCODING='utf-8'; python -B -m unittest discover -s tests -v
+INPUT: C:\Users\zhang\Desktop\mylife @ 6d0a0dc73135baca43e44483687ce70457d65e21
+LITERAL_RESULT:
+----------------------------------------------------------------------
+Ran 73 tests in 3.198s
+
+OK
+EXIT_STATUS: 0
+COMMAND_2: $env:PYTHONDONTWRITEBYTECODE='1'; $env:PYTHONIOENCODING='utf-8'; python -B -m unittest tests.test_controller_offline.ControllerOfflineTests.test_stopped_xlsx_waits_for_worker_then_bulk_deletes_completed_rows -v
+INPUT_2: C:\Users\zhang\Desktop\mylife @ 6d0a0dc73135baca43e44483687ce70457d65e21
 LITERAL_RESULT_2:
-test_xlsx_keeps_all_rows_during_processing_then_deletes_once (tests.test_controller_offline.ControllerOfflineTests.test_xlsx_keeps_all_rows_during_processing_then_deletes_once) ... ok
+test_stopped_xlsx_waits_for_worker_then_bulk_deletes_completed_rows (tests.test_controller_offline.ControllerOfflineTests.test_stopped_xlsx_waits_for_worker_then_bulk_deletes_completed_rows) ... ok
 
 ----------------------------------------------------------------------
-Ran 1 test in 0.171s
+Ran 1 test in 0.143s
 
 OK
 EXIT_STATUS_2: 0
-MODIFIED_BEHAVIOR: CSV/TXT still delete each explicit-result row after synchronous SQLite/CSV commit; XLSX/XLSM keep every row throughout processing and perform one bulk rebuild only after all worker threads join and the database writer closes; other worksheets remain unchanged.
+MODIFIED_BEHAVIOR: stop waits until every worker joins and the SQLite/CSV writer closes, then opens XLSX/XLSM once and bulk-deletes all done records; pending rows, other worksheets, and SQLite resume state remain.
+
+LIVE_STOP_REPAIR:
+COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; python -B - (JobDatabase.done_people + RealtimeInputRewriter.remove_people)
+INPUT: C:\Users\zhang\Desktop\mylife\测试文件1.xlsx; stopped run C:\Users\zhang\Desktop\mylife\logs\run_20260811_044307.log; SQLite done records
+LITERAL_RESULT:
+SOURCE=C:\Users\zhang\Desktop\mylife\测试文件1.xlsx
+DONE_RECORDS=4 REMOVED=4 BEFORE_ROWS=3558 AFTER_ROWS=3554
+OTHER_SHEETS_UNCHANGED=True
+STOP_REBUILD_VERIFY_OK
+EXIT_STATUS: 0
+LIVE_RESTORED_BEHAVIOR: the four explicit-result rows left by the pre-fix stopped run were deleted in one post-stop workbook rebuild; SHA256 changed from 2DD5515D4F524964BF62448362DF8BC181EC535B4FC9393BACA5380FDA4871E1 to D276E7B45EF65065A63A1CC4B8B5440FFF897C3C3E4D479F1A42DA43DA7B2955; all non-active worksheets were unchanged.
 
 LIVE_GUI:
 COMMAND: Start-Process -FilePath 'C:\Python312\pythonw.exe' -ArgumentList '-B','main.py','--auto-start' -WorkingDirectory 'C:\Users\zhang\Desktop\mylife' -PassThru
-INPUT: C:\Users\zhang\Desktop\mylife\测试文件2.csv; saved configuration; 4 threads; fresh profiles
+INPUT: C:\Users\zhang\Desktop\mylife\测试文件1.xlsx; saved configuration; 4 threads; fresh profiles; SQLite resume
 LITERAL_RESULT:
-GUI_PID=66960
+GUI_PID=30064
 GUI_ALIVE=True
-INPUT_ROWS_BEFORE=137
-STARTUP_DONE_ROWS=14
-INPUT_ROWS_AFTER_CATCHUP=123
+CURRENT_INPUT_ROWS=3554
+DB_STATUS=done:4,pending:3552,retry:2
+CSV=rows:4,birthdays:1,genders:2,zodiacs:1,remarks:4
 THREADS=total:4,alive:4
-CSV=rows:14,birthdays:12,genders:14,zodiacs:12,remarks:14
 EXIT_STATUS: 0
-LIVE_BEHAVIOR: selected CSV resumed from SQLite without shifted-row reimport; 14 already explicit results were matched by full original row and removed; four fresh browser profiles continued processing.
+LIVE_BEHAVIOR: GUI restarted with the selected XLSX, four fresh profiles, preserved pending jobs, and corrected post-stop deletion state.
 
 ROLLBACK:
-COMMAND: bash -lc "'/mnt/c/Users/zhang/Desktop/codex_tmp/mylife_rollback_verify_v112_20260811/ROLLBACK.sh' '/mnt/c/Users/zhang/Desktop/codex_tmp/mylife_rollback_verify_v112_20260811'"
+COMMAND: bash -lc "'/mnt/c/Users/zhang/Desktop/codex_tmp/mylife_rollback_verify_v112_stop_final_20260811/ROLLBACK.sh' '/mnt/c/Users/zhang/Desktop/codex_tmp/mylife_rollback_verify_v112_stop_final_20260811'"
 INPUT: independent clone of final v1.1.2 commit
 LITERAL_RESULT:
-ROLLBACK_OK base=9d374a5 files=4 controller_sha256=4449BFAF311FE7F49DE47157A83E422D8B0806F2A69C4697E818E545DF94C52A restored_behavior=xlsx_xlsm_realtime_row_deletion
+ROLLBACK_OK base=628d203 files=4 controller_sha256=D2536C0098902A1BF2E9B97C1996B90D3DC018765E618DE3A78C153F1763A492 restored_behavior=stop_keeps_deferred_xlsx_rows
 EXIT_STATUS: 0
 COMMAND_2: $env:PYTHONDONTWRITEBYTECODE='1'; $env:PYTHONIOENCODING='utf-8'; python -B -m unittest discover -s tests -v
 INPUT_2: same rollback clone after ROLLBACK.sh
 LITERAL_RESULT_2:
 ----------------------------------------------------------------------
-Ran 71 tests in 3.388s
+Ran 72 tests in 4.015s
 
 OK
 EXIT_STATUS_2: 0
-RESTORED_BEHAVIOR_STATUS: controller.py restored to SHA256 4449BFAF311FE7F49DE47157A83E422D8B0806F2A69C4697E818E545DF94C52A; XLSX/XLSM returned to per-result realtime deletion; formal MODIFIED_FILE remains on the corrected deferred single-pass behavior.
-
+RESTORED_BEHAVIOR_STATUS: controller.py restored to SHA256 D2536C0098902A1BF2E9B97C1996B90D3DC018765E618DE3A78C153F1763A492; the old stop branch again retained done XLSX/XLSM rows; formal MODIFIED_FILE remains on post-stop single-pass deletion.
