@@ -319,12 +319,25 @@ class BrowserSession:
         title = str(self.page.title() or "")
         html = str(self.page.content() or "")
         usable = self._is_usable_mylife_page(str(self.page.url or url), html, body, title)
+        status = int(getattr(response, "status", 0) or 0)
+        # Cloudflare 的初始 403 响应对象不会随客户端挑战完成而更新；页面可能在本次
+        # 读取后几百毫秒才替换为正常结果。先连续重读实时文档，再决定是否重建浏览器。
+        if status == 403 and not usable:
+            for _ in range(20):
+                self._check_cancelled()
+                self.page.wait_for_timeout(350)
+                body = self._body_text()
+                title = str(self.page.title() or "")
+                html = str(self.page.content() or "")
+                usable = self._is_usable_mylife_page(str(self.page.url or url), html, body, title)
+                if usable:
+                    break
         blocked = "sorry, you have been blocked" in body.lower() or "attention required" in title.lower()
-        if usable and response and response.status == 403:
+        if usable and status == 403:
             self.log(
                 f"线程{self.worker_number} 初始 HTTP=403 后已渲染有效 MyLife 页面，保留当前浏览器继续采集"
             )
-        elif blocked or (response and response.status == 403):
+        elif blocked or status == 403:
             self.challenge_failures += 1
             raise CloudflareFailure("Cloudflare 拒绝当前出口 IP")
         # 验证通过后的首次响应偶尔只有空壳 HTML；同一已验证上下文重载一次。
@@ -333,7 +346,7 @@ class BrowserSession:
             self._pause(1.5, 3.0)
             self._handle_cloudflare()
         self.log(
-            f"线程{self.worker_number} DevTools 导航：HTTP={getattr(response, 'status', '')} "
+            f"线程{self.worker_number} DevTools 导航：HTTP={status or ''} "
             f"title={title[:100]} html_chars={len(html)} url={self.page.url}"
         )
         if not self._captured_success and "mylife.com" in self.page.url:

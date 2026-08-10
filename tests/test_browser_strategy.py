@@ -82,11 +82,18 @@ class BrowserStrategyTests(unittest.TestCase):
         <body><h1 class="search-result-heading">We Found 1 Result for Aronde Hogg</h1>
         <a href="/aronde-hogg/e123">Aronde Torrez Hogg</a><div>Jacksonville, FL, 32218-7372</div></body></html>
         """
+        documents = iter(("<html><body>Checking your browser</body></html>", html))
+        current_document = [next(documents)]
+
+        def wait_for_timeout(_milliseconds: int) -> None:
+            current_document[0] = next(documents, html)
+
         page = SimpleNamespace(
             url=url,
             goto=lambda *_args, **_kwargs: SimpleNamespace(status=403),
             title=lambda: "Get Reputation Report details, Phone, Address & more.",
-            content=lambda: html,
+            content=lambda: current_document[0],
+            wait_for_timeout=wait_for_timeout,
         )
         session = object.__new__(BrowserSession)
         session.worker_number = 2
