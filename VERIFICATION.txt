@@ -77,12 +77,17 @@ ASSOCIATE_ROWS=3455
 PROPERTY_JSON_ADDRESS_ROWS=3558
 
 ROLLBACK:
-COMMAND: bash -lc "'/mnt/c/Users/zhang/Desktop/codex_tmp/mylife_rollback_verify_v111_20260811/ROLLBACK.sh' '/mnt/c/Users/zhang/Desktop/codex_tmp/mylife_rollback_verify_v111_20260811'"
+COMMAND: bash -lc "'/mnt/c/Users/zhang/Desktop/codex_tmp/mylife_rollback_verify_v111_20260811_0412/ROLLBACK.sh' '/mnt/c/Users/zhang/Desktop/codex_tmp/mylife_rollback_verify_v111_20260811_0412'"
 INPUT: independent clone of final v1.1.1 commit
-LITERAL_RESULT: PENDING_VERIFIED_ROLLBACK
-EXIT_STATUS: PENDING
+LITERAL_RESULT:
+ROLLBACK_OK base=24588fa files=39 version_sha256=8740E1202A509450D8164DECBB30E06C5D9E307209FE1C9D3916E8A59E52798C restored_behavior=v1.0.1_launcher_and_v1.0.0_collection
+EXIT_STATUS: 0
 COMMAND_2: $env:PYTHONDONTWRITEBYTECODE='1'; python -B -m unittest discover -s tests -v
 INPUT_2: same rollback clone after ROLLBACK.sh
-LITERAL_RESULT_2: PENDING_BASELINE_RETEST
-EXIT_STATUS_2: PENDING
-RESTORED_BEHAVIOR_STATUS: PENDING
+LITERAL_RESULT_2:
+----------------------------------------------------------------------
+Ran 18 tests in 2.367s
+
+OK
+EXIT_STATUS_2: 0
+RESTORED_BEHAVIOR_STATUS: version.py restored to SHA256 8740E1202A509450D8164DECBB30E06C5D9E307209FE1C9D3916E8A59E52798C (v1.0.1); modified-only modules were removed; baseline 18-test behavior was restored; formal MODIFIED_FILE remains changed.
