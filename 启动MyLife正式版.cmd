@@ -1,16 +1,19 @@
 @echo off
-chcp 65001 >nul
 setlocal
+chcp 65001 >nul
 cd /d "%~dp0"
-set PYTHONDONTWRITEBYTECODE=1
+set "PYTHONDONTWRITEBYTECODE=1"
+
 python -B bootstrap.py
 if errorlevel 1 goto :error
 python -B main.py
 if errorlevel 1 goto :error
+endlocal
 exit /b 0
 
 :error
+set "MYLIFE_EXIT_CODE=%errorlevel%"
 echo.
-echo MyLife GUI 启动失败，错误码：%errorlevel%
+echo MyLife GUI start failed. Error code: %MYLIFE_EXIT_CODE%
 pause
-exit /b %errorlevel%
+endlocal & exit /b %MYLIFE_EXIT_CODE%

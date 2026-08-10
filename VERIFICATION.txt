@@ -1,5 +1,5 @@
 CHANGED_BRANCH: main
-CHANGED_FIELDS: modular_gui+sqlite_wal+single_db_writer+adaptive_input+realtime_utf8_bom_csv+authenticated_socks_bridge+patchright_headful_hidden+continuous_turnstile_poll+proxy_geo+atomic_input_rebuild
+CHANGED_FIELDS: launcher_crlf_bytes+git_cmd_no_text_normalization+quoted_environment_assignment+preserved_exit_code
 
 ARTIFACT_PATHS:
 MODIFIED_FILE: C:\Users\zhang\Desktop\mylife\MODIFIED_FILE
@@ -7,25 +7,47 @@ DIFF_FILE: C:\Users\zhang\Desktop\mylife\DIFF_FILE
 VERIFICATION: C:\Users\zhang\Desktop\mylife\VERIFICATION.txt
 ROLLBACK: C:\Users\zhang\Desktop\mylife\ROLLBACK.sh
 
-ORIGINAL_SHA256:
-BEA2D6F251594CABDF5748FC24A188D18DF1DA9E8AB93D5394D4F1637B046654 *turnstile_harvester.py
-9D00BD8F72DBD0CFF6E7AD380F62CAD31397C45F32B2D9C4C03121325158EC36 *测试文件1.xlsx
-7F74F23E2B56656D468EDBE620E46FF12342D3007DBDF5E51514E41604772DC9 *测试文件2.csv
-8588065E7D5F193A614CF1439417EF7CFB15C5450702F0A7BE86052B5918D94A *设计思路.txt
+ORIGINAL_V1.0.0_LAUNCHER:
+PATH: C:\Users\zhang\Desktop\mylife\启动MyLife正式版.cmd
+SHA256: 64837F9A1477162492D59D571839DC17C9C1D7264C3A4B10DCBC2D1C70FB1352
+BYTES: 283
+LINE_ENDINGS: CRLF=0 LF=16 LONE_LF=16 BOM=False
 
 BASELINE:
-COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; python -B -m unittest discover -s 'C:\Users\zhang\Desktop\mylife' -p 'test*.py'
-INPUT: 原始目录，仅有 turnstile_harvester.py、测试文件1.xlsx、测试文件2.csv、设计思路.txt。
+COMMAND: cmd.exe /d /c 'echo.| call "C:\Users\zhang\Desktop\mylife\启动MyLife正式版.cmd"'
+INPUT: v1.0.0 正式目录中的纯 LF 启动器；向 pause 输入一个换行。
 LITERAL_OUTPUT:
-----------------------------------------------------------------------
-Ran 0 tests in 0.000s
+Press any key to continue . . .
+'tlocal' is not recognized as an internal or external command,
+operable program or batch file.
+'PYTHONDONTWRITEBYTECODE' is not recognized as an internal or external command,
+operable program or batch file.
+'p.py' is not recognized as an internal or external command,
+operable program or batch file.
+'to' is not recognized as an internal or external command,
+operable program or batch file.
+'�动失败，错误码：9009' is not recognized as an internal or external command,
+operable program or batch file.
+RESULT: exit status 1；cmd.exe 将纯 LF 批处理错位解析，GUI 未启动。
 
-NO TESTS RAN
-RESULT: exit status 5
+MODIFIED_LAUNCHER:
+COMMAND: cmd.exe /d /c 'call "C:\Users\zhang\Desktop\codex_tmp\mylife_launcher_fix_20260811\启动MyLife正式版.cmd"'
+INPUT: v1.0.1 CRLF 启动器；在临时副本中把 main.py 替换成只输出环境变量的探针，运行后立即按原 SHA256 恢复 main.py。
+LITERAL_OUTPUT:
+依赖检查通过，已安装项全部跳过。
+MAIN_PROBE_OK 1
+LAUNCHER_PARSE_EXIT=0
+RESULT: exit status 0；bootstrap.py 和 main.py 两条命令均被完整执行，PYTHONDONTWRITEBYTECODE=1。
+
+LINE_ENDING_TEST:
+COMMAND: python -B -（读取启动器原始字节并统计换行）
+INPUT: v1.0.1 启动器。
+LITERAL_OUTPUT: LINE_ENDINGS CRLF=19 LF=19 LONE_LF=0 BOM=False
+RESULT: exit status 0；SHA256=C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF。
 
 MODIFIED:
-COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; python -B -m unittest discover -s tests -v
-INPUT: 正式模块源码与 tests 中 18 个离线单元/集成测试。
+COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; py -3 -B -m unittest discover -s tests -v
+INPUT: 未修改的 Python 功能模块与既有 tests 中 18 个测试。
 LITERAL_OUTPUT:
 test_late_widget_poll_click_and_pass (test_cloudflare_handler.CloudflareHandlerTests.test_late_widget_poll_click_and_pass) ... ok
 test_full_pipeline_realtime_output_then_single_rebuild (test_controller_offline.ControllerOfflineTests.test_full_pipeline_realtime_output_then_single_rebuild) ... ok
@@ -47,103 +69,45 @@ test_xlsx_rebuild_preserves_unprocessed_rows (test_source_rewriter.SourceRewrite
 test_existing_module_token_and_detection (test_turnstile_harvester.TurnstileHarvesterTests.test_existing_module_token_and_detection) ... ok
 
 ----------------------------------------------------------------------
-Ran 18 tests in 1.835s
+Ran 18 tests in 1.853s
 
 OK
 RESULT: exit status 0
 
+RELEASE_ARCHIVE_TEST:
+COMMAND: git archive --format=zip HEAD；随后用 Python zipfile 读取 `启动MyLife正式版.cmd` 原始字节。
+INPUT: v1.0.1 源码提交；后续仅修订验证文档，启动器字节不变。
+LITERAL_OUTPUT:
+COMMIT_LAUNCHER SHA256=C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF CRLF=19 LF=19 LONE_LF=0
+ARCHIVE_LAUNCHER SHA256=C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF CRLF=19 LF=19 LONE_LF=0
+RESULT: exit status 0；Git 提交和 ZIP 内启动器字节完全相同。
+
 SELF_CHECK:
-COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; python -B main.py --check
-INPUT: 正式源码、当前 Python 3.12.10 环境。
+COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; py -3 -B main.py --check
+INPUT: v1.0.1 源码和当前 Python 环境。
 LITERAL_OUTPUT:
 依赖检查通过，已安装项全部跳过。
 SELF_CHECK_OK
 RESULT: exit status 0
 
-GUI_SMOKE:
-COMMAND: python -B -（创建隐藏 Tk 根窗口、构造 MainWindow、update_idletasks、销毁）
-INPUT: 设计思路.txt 中动态代理行。
-LITERAL_OUTPUT: GUI_SMOKE_OK 11 小窗口 1
-RESULT: exit status 0；GUI 控件、代理动态加载、小窗口默认值和线程默认值有效。
-
-INPUT_AUDIT:
-COMMAND: python -B -（load_people 只读审计两个测试文件）
-INPUT: 测试文件1.xlsx、测试文件2.csv。
-LITERAL_OUTPUT:
-测试文件1.xlsx ROWS 6552 VALID 3591 INVALID 2961 WITH_LOCATION 3586 DISTINCT_NAMES 3499
-测试文件2.csv ROWS 202 VALID 137 INVALID 65 WITH_LOCATION 137 DISTINCT_NAMES 132
-RESULT: exit status 0；任意列顺序和上游结果列可被识别，原文件未改。
-
-PROXY_CONNECTIVITY:
-COMMAND: python -B -（ThreadPoolExecutor 并行执行 ProxyPool.check）
-INPUT: 设计思路.txt 中 11 套去重代理。
-LITERAL_OUTPUT: PROXY_COUNT 11；PROXY_1..PROXY_11 均 OK；READY 11。
-RESULT: exit status 0；11/11 出口 IP 与 America/New_York 时区均确认。
-
-PATCHRIGHT_PROXY_BRIDGE:
-COMMAND: python -B -（BrowserSession 无头代理访问 https://api.ipify.org）
-INPUT: 含 # 字符密码的代理、本地认证 SOCKS5 桥、Patchright Chrome。
-LITERAL_OUTPUT: PATCHRIGHT_PROXY 200 IP_LEN 13 TZ America/New_York
-RESULT: exit status 0；Chromium 经本地桥绑定远端认证 SOCKS5，时区随 IP。
-
-REFERENCE_READ_ONLY:
-INPUT: E:\truepeoplesearch 与 E:\txfgsales，只读参考 Cloudflare/Patchright 已验证实现。
-LITERAL_RESULT:
-E:\truepeoplesearch\truepeoplesearch_step16.py SHA256=59702A21075A19670BF411A17A1FB5B46646465EE09559257D02B07A09713B97
-E:\txfgsales\browser_manager.py SHA256=0267ED738EDC8FA53BBC862B87510A233BB0B823D9C2BA24B5638598FD987840
-E:\txfgsales\processor.py SHA256=457873316E4DC731CC7327729DBEC84AF29CC3420F335165FF64804887FE2E57
-RESULT: 三个参考文件未写入；正式源码采用持续 450ms 控件轮询、headful-hidden、延后 geolocation 与本地网络访问检查兼容策略。
-
-LIVE_CLOUDFLARE_SEARCH:
-COMMAND: python -B -（Patchright 小窗口、代理、MyLife 姓名+城市州邮编真实搜索）
-INPUT: 一条设计样例姓名/城市/州/邮编、代理池中已通过检查的固定代理。
-LITERAL_OUTPUT:
-Cloudflare 第 9 次检查已真实点击控件：方式=challenge-frame-element-coordinate，选择器=frame.frame_element()，累计=1
-Cloudflare 第 11 次检查已真实点击控件：方式=challenge-frame-element-coordinate，选择器=frame.frame_element()，累计=2
-Cloudflare 第 13 次检查已真实点击控件：方式=frame-control-mouse，选择器=input[type='checkbox']，累计=3
-Cloudflare 已放行：检查 16 次，真实点击 4 次
-CF_REFERENCE_PROBE=PASS RESULTS 1 NO_RESULTS False TITLE Get Reputation Report details, Phone, Address & more.
-RESULT: exit status 0；Cloudflare 真实放行并提取 1 条搜索结果。
-
-LIVE_FULL_PIPELINE:
-COMMAND: python -B -（AppController 单记录完整实跑）
-INPUT: 一条设计样例、1 线程、小窗口、固定代理、SQLite WAL、实时 CSV。
-LITERAL_OUTPUT:
-线程1 搜索结果第 1 页：1 条
-线程1 已采集第 1 个详情，生日=页面未公开
-线程1 完成输入第 2 行，输出 1 条
-全部处理线程结束，已一次性重建输入文件并删除 1 行明确结果
-LIVE_FULL_SUMMARY {'done': 1}
-LIVE_FULL_ROWS 1 STATUSES ['已提取详情'] BIRTHDAYS 0 PROFILE_URLS 1
-LIVE_FULL_INPUT_LINES 1
-RESULT: exit status 0；搜索、逐详情访问、实时 CSV、SQLite done、输入批次重建全部完成；该详情页的 Date of Birth 区域为 Public/Private 占位且未公开具体生日，结果明确记录“详情页未公开生日”。
-
-LIVE_HIDDEN_MODE:
-COMMAND: python -B -（Patchright“无头”真实搜索）
-INPUT: 同一 MyLife 搜索、Win32 隐藏本会话新增 Chrome 窗口。
-LITERAL_OUTPUT: HIDDEN_PATCHRIGHT=PASS HIDDEN_HANDLES 4 RESULTS 1 NO_RESULTS False
-RESULT: exit status 0；无头选项内部 headful-hidden，Managed Turnstile 可签发并返回结果。
-
 ROLLBACK:
-COMMAND: C:\Program Files\Git\bin\bash.exe ROLLBACK.sh C:\Users\zhang\Desktop\codex_tmp\mylife_rollback_copy3_20260811
-INPUT: 修改版完整副本；原始四文件与正式新增模块同时存在。
-LITERAL_OUTPUT: ROLLBACK_OK originals=4 restored_behavior=baseline_no_tests
+COMMAND: C:\Program Files\Git\bin\bash.exe ROLLBACK.sh C:\Users\zhang\Desktop\codex_tmp\mylife_launcher_rollback_copy_20260811
+INPUT: v1.0.1 修改版完整副本及其 Git 历史。
+LITERAL_OUTPUT: ROLLBACK_OK base=9139968 files=8 launcher_sha256=64837F9A1477162492D59D571839DC17C9C1D7264C3A4B10DCBC2D1C70FB1352 restored_behavior=lf_only_v1.0.0
 RESULT: exit status 0
 
 ROLLBACK_TEST:
-COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; python -B -m unittest discover -s 'C:\Users\zhang\Desktop\codex_tmp\mylife_rollback_copy3_20260811' -p 'test*.py'
+COMMAND: python -B -（比较回滚副本工作树与 9139968、检查启动器 SHA256 和换行）
 INPUT: 已执行回滚的另一份副本。
 LITERAL_OUTPUT:
-----------------------------------------------------------------------
-Ran 0 tests in 0.000s
+ROLLBACK_TREE_EXCEPT_SCRIPT_MATCH=True
+ROLLBACK_LAUNCHER SHA256=64837F9A1477162492D59D571839DC17C9C1D7264C3A4B10DCBC2D1C70FB1352 CRLF=0 LF=16 LONE_LF=16
+ROLLBACK_ADDED_FILES_PRESENT gitattributes=False release_notes=False
+RESULT: exit status 0
 
-NO TESTS RAN
-RESULT: exit status 5（与 BASELINE 一致）
+RESTORED_BEHAVIOR_STATUS: 回滚副本除正在执行且需保留的 ROLLBACK.sh 外，其余热修复文件与 v1.0.0 提交 9139968 完全匹配；启动器恢复原始 SHA256 和纯 LF 状态，重现 v1.0.0 的启动器行为；正式工作副本继续保留 CRLF 修复。
 
-ROLLBACK_HASH_RESULT:
-turnstile_harvester.py MATCH=True HASH=BEA2D6F251594CABDF5748FC24A188D18DF1DA9E8AB93D5394D4F1637B046654
-测试文件1.xlsx MATCH=True HASH=9D00BD8F72DBD0CFF6E7AD380F62CAD31397C45F32B2D9C4C03121325158EC36
-测试文件2.csv MATCH=True HASH=7F74F23E2B56656D468EDBE620E46FF12342D3007DBDF5E51514E41604772DC9
-设计思路.txt MATCH=True HASH=8588065E7D5F193A614CF1439417EF7CFB15C5450702F0A7BE86052B5918D94A
-
-RESTORED_BEHAVIOR_STATUS: 回滚副本只剩四个原始文件，四个 SHA256 全部匹配，测试行为恢复为 BASELINE 的 0 tests / exit 5；正式工作副本继续保留修改版。
+UNCHANGED_FILES:
+设计思路.txt SHA256=8588065E7D5F193A614CF1439417EF7CFB15C5450702F0A7BE86052B5918D94A；未改动。
+Python 功能模块 main.py、bootstrap.py、browser_worker.py、cloudflare_handler.py、controller.py、database.py、gui.py、input_loader.py、models.py、mylife_parser.py、output_writer.py、proxy_pool.py、socks_bridge.py、source_rewriter.py、turnstile_harvester.py 均未做功能修改；version.py 仅更新版本号。
+E:\truepeoplesearch 与 E:\txfgsales 继续保持只读。

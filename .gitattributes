@@ -1,0 +1,9 @@
+*.cmd binary
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.sh text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
+DIFF_FILE text eol=lf
+MODIFIED_FILE text eol=lf
