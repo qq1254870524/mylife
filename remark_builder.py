@@ -11,6 +11,7 @@ def build_result_remark(result: Mapping[str, Any]) -> str:
     coverage = str(result.get("search_coverage") or "").strip()
     status = str(result.get("status") or "").strip()
     message = str(result.get("message") or "").strip()
+    demographics_note = str(result.get("demographics_note") or "").strip()
 
     search_method = strategy.split("→年龄分层", 1)[0].strip("→ ")
     if search_method.startswith("姓名+城市州邮编"):
@@ -29,4 +30,6 @@ def build_result_remark(result: Mapping[str, Any]) -> str:
         parts.append(f"结果：{status}")
     if message:
         parts.append(f"原因：{message}")
+    if demographics_note:
+        parts.append(f"字段来源：{demographics_note}")
     return "；".join(parts)

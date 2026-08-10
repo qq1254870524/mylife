@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 from models import PersonInput, SearchResult
-from search_planner import former_name_pairs, has_exact_age, merge_search_results
+from search_planner import former_name_pairs, has_exact_age, merge_search_results, past_locations
 
 
 class SearchPlannerTests(unittest.TestCase):
@@ -32,6 +32,21 @@ class SearchPlannerTests(unittest.TestCase):
         target = [first]
         self.assertEqual(merge_search_results(target, [first, exact]), 1)
         self.assertTrue(has_exact_age(target, "28"))
+
+    def test_past_locations_are_unique_and_skip_current_location(self) -> None:
+        person = self.person("")
+        person.city = "Baltimore"
+        person.state = "MD"
+        person.zip_code = "21218"
+        person.original = {
+            "past_addresses": (
+                "701 E 30th St, Baltimore, MD 21218|"
+                "82 Deborah Ct, Plainfield, NJ 07062|"
+                "620 Newark Ave #9, Jersey City, NJ 07306|"
+                "99 Other St, Plainfield, NJ 07062"
+            )
+        }
+        self.assertEqual(past_locations(person), ["Plainfield, NJ 07062", "Jersey City, NJ 07306"])
 
 
 if __name__ == "__main__":

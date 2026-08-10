@@ -121,8 +121,8 @@ class JobDatabase:
             connection.commit()
             return int(cursor.rowcount)
 
-    def reset_incomplete_birthdays(self, source_path: Path, search_revision: int) -> int:
-        """搜索策略升级后仅重跑旧版空生日结果；同一版本不重复重跑。"""
+    def reset_incomplete_demographics(self, source_path: Path, search_revision: int) -> int:
+        """策略升级后重跑旧版生日/性别/星座不完整结果；同一版本不重复。"""
 
         with closing(self.connect()) as connection, connection:
             rows = connection.execute(
@@ -131,7 +131,11 @@ class JobDatabase:
                 FROM jobs AS j
                 JOIN results AS r ON r.job_id=j.id
                 WHERE j.source_path=?
-                  AND COALESCE(json_extract(r.result_json, '$.birthday'), '')=''
+                  AND (
+                    COALESCE(json_extract(r.result_json, '$.birthday'), '')=''
+                    OR COALESCE(json_extract(r.result_json, '$.gender'), '')=''
+                    OR COALESCE(json_extract(r.result_json, '$.zodiac'), '')=''
+                  )
                   AND COALESCE(json_extract(r.result_json, '$.search_revision'), 0) < ?
                 """,
                 (str(source_path.resolve()), search_revision),
@@ -148,6 +152,11 @@ class JobDatabase:
             )
             connection.commit()
             return len(job_ids)
+
+    def reset_incomplete_birthdays(self, source_path: Path, search_revision: int) -> int:
+        """兼容旧调用名。"""
+
+        return self.reset_incomplete_demographics(source_path, search_revision)
 
     def pending_people(self, source_path: Path, max_attempts: int) -> list[tuple[int, PersonInput, int]]:
         with closing(self.connect()) as connection, connection:
@@ -204,6 +213,35 @@ class JobDatabase:
             (json.loads(row["original_json"]), json.loads(row["result_json"]), str(row["created_at"]))
             for row in rows
         ]
+
+    def result_records(self, source_path: Path) -> list[tuple[int, dict[str, Any], dict[str, Any], str]]:
+        with closing(self.connect()) as connection, connection:
+            rows = connection.execute(
+                """
+                SELECT r.id, j.original_json, r.result_json, r.created_at
+                FROM results AS r
+                JOIN jobs AS j ON j.id=r.job_id
+                WHERE j.source_path=?
+                ORDER BY j.source_row, r.result_index, r.id
+                """,
+                (str(source_path.resolve()),),
+            ).fetchall()
+        return [
+            (int(row["id"]), json.loads(row["original_json"]), json.loads(row["result_json"]), str(row["created_at"]))
+            for row in rows
+        ]
+
+    def update_result_records(self, updates: dict[int, dict[str, Any]]) -> int:
+        if not updates:
+            return 0
+        with closing(self.connect()) as connection, connection:
+            for result_id, result in updates.items():
+                connection.execute(
+                    "UPDATE results SET result_json=? WHERE id=?",
+                    (json.dumps(result, ensure_ascii=False), result_id),
+                )
+            connection.commit()
+        return len(updates)
 
     def done_source_rows(self, source_path: Path) -> set[int]:
         with closing(self.connect()) as connection, connection:

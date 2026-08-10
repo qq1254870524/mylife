@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import json
 from dataclasses import dataclass
 from datetime import date, datetime
 from difflib import SequenceMatcher
@@ -30,6 +31,7 @@ CURRENT_ADDRESS_KEYS = {
     "当前地址",
     "现地址",
 }
+CURRENT_ADDRESS_PROPERTY_KEYS = {"currentaddresspropertyinfo", "当前地址房产信息"}
 PAST_ADDRESS_KEYS = {
     "pastaddress",
     "pastaddresses",
@@ -51,6 +53,8 @@ FORMER_NAME_KEYS = {
 }
 RELATIVE_KEYS = {"possiblerelative", "possiblerelatives", "relatives", "亲属", "可能亲属"}
 ASSOCIATE_KEYS = {"possibleassociate", "possibleassociates", "associates", "关联人", "可能关联人"}
+QUERY_KEYS = {"query", "查询", "搜索值", "检索值"}
+SEARCH_TYPE_KEYS = {"searchtype", "搜索类型", "查询类型"}
 
 PHONE_RE = re.compile(r"(?<!\d)(?:\+?1[\s.()-]*)?(\d{3})[\s.()-]*(\d{3})[\s.-]*(\d{4})(?!\d)")
 EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
@@ -69,6 +73,7 @@ class CandidateScore:
     score: int
     strong_categories: int
     exact_age: bool
+    age_difference: int | None
     evidence: list[str]
     conflicts: list[str]
 
@@ -103,6 +108,43 @@ def _split_values(values: list[str]) -> list[str]:
     for value in values:
         result.extend(part.strip() for part in re.split(r"[|\r\n;]+", value) if part.strip())
     return result
+
+
+def _query_values(person: PersonInput, kind: str) -> list[str]:
+    search_types = " ".join(_values(person, SEARCH_TYPE_KEYS)).lower()
+    queries = _values(person, QUERY_KEYS)
+    if kind == "phone" and any(marker in search_types for marker in ("phone", "mobile", "电话", "手机")):
+        return queries
+    if kind == "email" and any(marker in search_types for marker in ("email", "邮箱")):
+        return queries
+    return []
+
+
+def _property_addresses(person: PersonInput) -> list[str]:
+    found: list[str] = []
+    for raw in _values(person, CURRENT_ADDRESS_PROPERTY_KEYS):
+        try:
+            data = json.loads(raw)
+        except (TypeError, ValueError):
+            continue
+        if isinstance(data, dict):
+            address = _clean(data.get("Address") or data.get("address"))
+            if address:
+                found.append(address)
+    return found
+
+
+def _contact_names(values: list[str]) -> dict[str, int | None]:
+    contacts: dict[str, int | None] = {}
+    for part in _split_values(values):
+        age_match = re.search(r"(?:\bAge\s*|,\s*)(\d{1,3})\b", part, re.I)
+        age = int(age_match.group(1)) if age_match and 0 < int(age_match.group(1)) < 125 else None
+        name = re.sub(r"\s*\(?\bAge\s*\d{1,3}\)?\s*$", "", part, flags=re.I)
+        name = re.sub(r",\s*\d{1,3}\s*$", "", name).strip()
+        normalized = _compact(name)
+        if len(normalized) >= 6:
+            contacts[normalized] = age
+    return contacts
 
 
 def _phones(texts: list[str]) -> set[str]:
@@ -201,7 +243,7 @@ def score_candidate(person: PersonInput, detail: ProfileResult) -> CandidateScor
     candidate_text = _location_text(detail)
     candidate_compact = _compact(candidate_text)
 
-    input_phones = _phones(_values(person, PHONE_KEYS))
+    input_phones = _phones([*_values(person, PHONE_KEYS), *_query_values(person, "phone")])
     candidate_phones = _phones([candidate_text])
     exact_phones = input_phones & candidate_phones
     last7 = {phone[-7:] for phone in input_phones} & {phone[-7:] for phone in candidate_phones}
@@ -221,7 +263,7 @@ def score_candidate(person: PersonInput, detail: ProfileResult) -> CandidateScor
         score -= 8
         conflicts.append("公开手机号不一致")
 
-    input_emails = _emails(_values(person, EMAIL_KEYS))
+    input_emails = _emails([*_values(person, EMAIL_KEYS), *_query_values(person, "email")])
     candidate_emails = _emails([candidate_text])
     if input_emails & candidate_emails:
         score += 50
@@ -231,7 +273,7 @@ def score_candidate(person: PersonInput, detail: ProfileResult) -> CandidateScor
         score -= 6
         conflicts.append("公开邮箱不一致")
 
-    current_addresses = _split_values(_values(person, CURRENT_ADDRESS_KEYS))
+    current_addresses = _split_values([*_values(person, CURRENT_ADDRESS_KEYS), *_property_addresses(person)])
     past_addresses = _split_values(_values(person, PAST_ADDRESS_KEYS))
     exact_current = [
         address
@@ -312,11 +354,7 @@ def score_candidate(person: PersonInput, detail: ProfileResult) -> CandidateScor
         score += 3
         evidence.append("州一致（弱证据）")
 
-    relative_names = {
-        _compact(name)
-        for name in _split_values(_values(person, RELATIVE_KEYS))
-        if len(_compact(name)) >= 6
-    }
+    relative_names = _contact_names(_values(person, RELATIVE_KEYS))
     relative_hits = sum(1 for name in relative_names if name in candidate_compact)
     if relative_hits:
         score += min(16, relative_hits * 8)
@@ -324,11 +362,7 @@ def score_candidate(person: PersonInput, detail: ProfileResult) -> CandidateScor
         if relative_hits >= 2:
             strong.add("relatives")
 
-    associate_names = {
-        _compact(name)
-        for name in _split_values(_values(person, ASSOCIATE_KEYS))
-        if len(_compact(name)) >= 6
-    }
+    associate_names = _contact_names(_values(person, ASSOCIATE_KEYS))
     associate_hits = sum(1 for name in associate_names if name in candidate_compact)
     if associate_hits:
         score += min(6, associate_hits * 3)
@@ -341,6 +375,7 @@ def score_candidate(person: PersonInput, detail: ProfileResult) -> CandidateScor
         input_age is not None
         and (candidate_age == input_age or (candidate_age is None and birthday_age == input_age))
     )
+    age_difference = abs(input_age - candidate_age) if input_age is not None and candidate_age is not None else None
     if exact_age:
         score += 30
         evidence.append("年龄完全一致")
@@ -370,6 +405,7 @@ def score_candidate(person: PersonInput, detail: ProfileResult) -> CandidateScor
         score=score,
         strong_categories=len(strong),
         exact_age=exact_age,
+        age_difference=age_difference,
         evidence=evidence,
         conflicts=conflicts,
     )
@@ -405,7 +441,12 @@ def select_best_identity(
 
     scored = [score_candidate(person, detail) for detail in details]
     exact_age = [item for item in scored if item.exact_age]
-    pool = exact_age or scored
+    near_age = [
+        item
+        for item in scored
+        if item.age_difference == 1 and item.strong_categories >= 1 and item.score >= 20
+    ]
+    pool = exact_age or near_age or scored
     ranked = sorted(
         pool,
         key=lambda item: (item.score, item.strong_categories, bool(item.detail.birthday), -item.detail.result_index),
@@ -419,7 +460,11 @@ def select_best_identity(
     age_reason = (
         f"先限定 {len(exact_age)} 个同龄候选"
         if exact_age
-        else (f"没有年龄 {person.age} 的候选" if person.age else "输入未提供年龄")
+        else (
+            f"没有完全同龄候选，先限定 {len(near_age)} 个年龄相差1岁候选"
+            if near_age
+            else (f"没有年龄 {person.age} 或相差1岁的候选" if person.age else "输入未提供年龄")
+        )
     )
     evidence_text = "、".join(best.evidence[:8]) or "仅有弱匹配证据"
     conflict_text = f"；冲突={'、'.join(best.conflicts[:4])}" if best.conflicts else ""

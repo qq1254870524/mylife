@@ -87,6 +87,17 @@ class BrowserStrategyTests(unittest.TestCase):
         self.assertEqual(selected.profile_url, exact_alias.profile_url)
         self.assertTrue(selected.query_strategy.startswith("曾用名(Jane Smith)+城市州邮编"))
 
+    def test_past_location_search_runs_before_alias_when_current_and_name_have_no_age_match(self) -> None:
+        person = self.person()
+        person.original = {"past_addresses": "82 Deborah Ct, Plainfield, NJ 07062"}
+        wrong_age = SearchResult("https://www.mylife.com/jane-doe/e1", "Jane Doe", "71", "Denver CO 80202")
+        exact_past = SearchResult("https://www.mylife.com/jane-doe/e2", "Jane Doe", "42", "Plainfield NJ 07062")
+        session, calls = self.session([[wrong_age], [], [exact_past]])
+        selected = session.process(person)[0]
+        self.assertEqual(len(calls), 3)
+        self.assertIn("searchLocation=Plainfield%2C+NJ+07062", calls[2])
+        self.assertTrue(selected.query_strategy.startswith("姓名+曾用城市州邮编"))
+
     def test_return_to_list_uses_saved_get_url_without_history_back(self) -> None:
         session = object.__new__(BrowserSession)
         session.worker_number = 1

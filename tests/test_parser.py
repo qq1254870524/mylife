@@ -82,6 +82,22 @@ class ParserTests(unittest.TestCase):
         result = parse_profile_html(f"<h1>Jane Doe, 48</h1>{html}", seed, 1, "姓名")
         self.assertEqual(result.zodiac, "Libra (September 23 - October 22)")
 
+    def test_hidden_structured_birthday_gender_and_computed_zodiac(self) -> None:
+        html = '''
+        <html><head><script type="application/ld+json">
+        {"birthDate":"1977-10-03","gender":"Female"}
+        </script></head><body><h1>Jennifer Fisher, 48</h1></body></html>
+        '''
+        seed = SearchResult("https://www.mylife.com/jennifer-fisher/e1", full_name="Jennifer Fisher")
+        result = parse_profile_html(html, seed, 1, "姓名")
+        self.assertEqual(result.birthday, "10/03/1977")
+        self.assertEqual(result.gender, "Female")
+        self.assertEqual(result.zodiac, "Libra (September 23 - October 22)")
+        self.assertIn("星座=完整生日确定", result.demographics_note)
+
+    def test_partial_month_day_is_not_output_as_unique_birthday(self) -> None:
+        self.assertEqual(extract_birthday("Birthday: October 3"), "")
+
 
 if __name__ == "__main__":
     unittest.main()

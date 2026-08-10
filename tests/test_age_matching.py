@@ -119,6 +119,41 @@ class AgeMatchingTests(unittest.TestCase):
         self.assertEqual(selected.profile_url, "https://www.mylife.com/b/e2")
         self.assertIn("1 个同龄候选", selected.message)
 
+    def test_one_year_age_pool_beats_unrelated_exact_name_only_candidate(self) -> None:
+        person = self.person(age="42")
+        person.original = {"current_address": "1450 Pearl St, Denver, CO 80202"}
+        details = [
+            ProfileResult(1, "https://www.mylife.com/a/e1", full_name="Jane Doe", age="60", birthday="January 1, 1966", location="Miami, FL"),
+            ProfileResult(2, "https://www.mylife.com/b/e2", full_name="Jane Doe", age="41", birthday="March 7, 1985", location="1450 Pearl St, Denver, CO 80202"),
+        ]
+        selected = select_best_birthday(person, details, len(details))
+        self.assertEqual(selected.profile_url, "https://www.mylife.com/b/e2")
+        self.assertIn("年龄相差1岁候选", selected.message)
+
+    def test_original_search_phone_is_a_strong_signal(self) -> None:
+        person = self.person(age="")
+        person.original = {"query": "3035551234", "search_type": "手机号"}
+        detail = ProfileResult(
+            1,
+            "https://www.mylife.com/a/e1",
+            full_name="Jane Doe",
+            profile_summary="Phone (303) 555-1234",
+        )
+        scored = score_candidate(person, detail)
+        self.assertIn("完整手机号一致", scored.evidence)
+
+    def test_relative_age_suffix_is_removed_before_name_matching(self) -> None:
+        person = self.person(age="")
+        person.original = {"possible_relatives": "John Doe (Age 47)|Mary Doe (Age 52)"}
+        detail = ProfileResult(
+            1,
+            "https://www.mylife.com/a/e1",
+            full_name="Jane Doe",
+            profile_summary="Possible relatives include John Doe and Mary Doe",
+        )
+        scored = score_candidate(person, detail)
+        self.assertIn("共同亲属一致2人", scored.evidence)
+
 
 if __name__ == "__main__":
     unittest.main()

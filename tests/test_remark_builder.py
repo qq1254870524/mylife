@@ -41,6 +41,17 @@ class RemarkBuilderTests(unittest.TestCase):
         self.assertIn("搜索方式：曾用名(Kyasia Smith)+城市州邮编", remark)
         self.assertIn("搜索范围：姓名+城市州邮编→姓名→曾用名(Kyasia Smith)+城市州邮编", remark)
 
+    def test_demographic_field_sources_are_recorded(self) -> None:
+        remark = build_result_remark(
+            {
+                "query_strategy": "姓名",
+                "status": "已匹配生日（高置信度）",
+                "message": "年龄和地址一致",
+                "demographics_note": "生日=MyLife详情、星座=完整生日确定",
+            }
+        )
+        self.assertIn("字段来源：生日=MyLife详情、星座=完整生日确定", remark)
+
     def test_invalid_input_explains_no_search(self) -> None:
         remark = build_result_remark(
             {"query_strategy": "输入校验", "status": "输入无效", "message": "姓名至少需要名和姓"}

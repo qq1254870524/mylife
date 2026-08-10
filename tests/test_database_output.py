@@ -169,6 +169,32 @@ class DatabaseOutputTests(unittest.TestCase):
             self.assertEqual(len(jobs), 1)
             self.assertEqual(jobs[0][2], 0)
 
+    def test_old_gender_only_gap_is_requeued_by_demographic_revision(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            input_path = root / "input.csv"
+            input_path.write_text("name\nJane Doe\n", encoding="utf-8")
+            person = PersonInput(
+                source_path=input_path.resolve(), source_row=2, headers=["name"],
+                original={"name": "Jane Doe"}, first_value="Jane Doe",
+                first_name="Jane", last_name="Doe",
+            )
+            database = JobDatabase(root / "state.sqlite3")
+            database.import_people([person])
+            job_id, _, _ = database.pending_people(input_path, 3)[0]
+            result = ProfileResult(
+                1, "https://www.mylife.com/jane-doe/e1", birthday="03/07/1984",
+                zodiac="Pisces (February 19 - March 20)", search_revision=2,
+            )
+            output = RealtimeCsvWriter(root, input_path, ["name"])
+            writer = DatabaseWriter(database, output, lambda _message: None)
+            writer.start()
+            writer.put("result", job_id, person, result)
+            writer.put("done", job_id, "old")
+            writer.flush(); writer.close()
+            self.assertEqual(database.reset_incomplete_demographics(input_path, 3), 1)
+            self.assertEqual(database.summary(input_path).get("pending"), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

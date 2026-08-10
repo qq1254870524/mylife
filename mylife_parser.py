@@ -7,6 +7,7 @@ from urllib.parse import quote_plus, urljoin, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup, Tag
 
+from demographics_enricher import zodiac_from_birthday
 from models import ProfileResult, SearchResult
 
 
@@ -15,8 +16,8 @@ AGE_RE = re.compile(r"\b(?:Age\s*)?(\d{1,3})\s*(?:years?\s*old|yrs?\.?\s*old)?\b
 MONTH = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
 ZODIAC = r"(?:Aries|Taurus|Gemini|Cancer|Leo|Virgo|Libra|Scorpio|Sagittarius|Capricorn|Aquarius|Pisces)"
 BIRTHDAY_PATTERNS = (
-    re.compile(rf"\b(?:Birthday|Date\s+of\s+Birth|Born(?:\s+on)?)\s*[:\-]?\s*({MONTH}\s+\d{{1,2}}(?:,\s*\d{{4}})?)", re.I),
-    re.compile(r"\b(?:Birthday|Date\s+of\s+Birth|Born(?:\s+on)?)\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)", re.I),
+    re.compile(rf"\b(?:Birthday|Date\s+of\s+Birth|Born(?:\s+on)?)\s*[:\-]?\s*({MONTH}\s+\d{{1,2}},\s*\d{{4}})", re.I),
+    re.compile(r"\b(?:Birthday|Date\s+of\s+Birth|Born(?:\s+on)?)\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})", re.I),
 )
 
 
@@ -124,12 +125,27 @@ def parse_search_results(html: str, base_url: str) -> tuple[list[SearchResult], 
     return results, next_url, no_results
 
 
-def extract_birthday(text: str) -> str:
+def extract_birthday(text: str, html: str = "") -> str:
     clean = _clean_text(text)
     for pattern in BIRTHDAY_PATTERNS:
         match = pattern.search(clean)
         if match:
             return _clean_text(match.group(1))
+    raw = unescape(html or "")
+    match = re.search(
+        r'''["'](?:birthDate|dateOfBirth|birthday|dob)["']\s*:\s*["'](\d{4})-(\d{2})-(\d{2})["']''',
+        raw,
+        re.I,
+    )
+    if match:
+        return f"{match.group(2)}/{match.group(3)}/{match.group(1)}"
+    match = re.search(
+        r'''["'](?:birthDate|dateOfBirth|birthday|dob)["']\s*:\s*["'](\d{1,2}[/-]\d{1,2}[/-]\d{4})["']''',
+        raw,
+        re.I,
+    )
+    if match:
+        return match.group(1)
     return ""
 
 
@@ -139,6 +155,13 @@ def extract_gender(html: str, text: str = "") -> str:
     match = re.search(r"\b(?:Gender|Sex)\s*[:\-]?\s*(Female|Male|Non[- ]?binary)\b", clean, re.I)
     if match:
         return match.group(1).replace("-", " ").title()
+    raw_match = re.search(
+        r'''["'](?:gender|sex)["']\s*:\s*["'](Female|Male|Non[- ]?binary)["']''',
+        unescape(html or ""),
+        re.I,
+    )
+    if raw_match:
+        return raw_match.group(1).replace("-", " ").title()
     for span in soup.find_all("span"):
         value = _clean_text(span.get_text(" ", strip=True))
         if re.fullmatch(r"Female|Male|Non[- ]?binary", value, re.I):
@@ -173,9 +196,20 @@ def parse_profile_html(html: str, seed: SearchResult, result_index: int, strateg
     age = extract_age(heading_text) or extract_age(text) or seed.age
     location = _field(text[:8000], r"Lives?\s+in|Current\s+Address|Location") or seed.location
     former_names = _field(text[:8000], r"Aliases?|Former\s+Names?|Also\s+Known\s+As") or seed.former_names
-    birthday = extract_birthday(text)
+    birthday = extract_birthday(text, html)
     gender = extract_gender(html, text)
     zodiac = extract_zodiac(html, text)
+    sources: list[str] = []
+    if birthday:
+        sources.append("生日=MyLife详情")
+    if gender:
+        sources.append("性别=MyLife详情")
+    if not zodiac and birthday:
+        zodiac = zodiac_from_birthday(birthday)
+        if zodiac:
+            sources.append("星座=完整生日确定")
+    elif zodiac:
+        sources.append("星座=MyLife详情")
     return ProfileResult(
         result_index=result_index,
         profile_url=seed.profile_url,
@@ -190,5 +224,6 @@ def parse_profile_html(html: str, seed: SearchResult, result_index: int, strateg
         # 身份匹配模块需要读取页面后段的电话和曾用地址；数据库保留到 20K 字符，CSV 不输出此字段。
         profile_summary=text[:20000],
         query_strategy=strategy,
+        demographics_note="、".join(sources),
         message="" if birthday else "详情页未公开生日",
     )

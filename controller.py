@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Callable
 
 from browser_worker import BrowserSession, Cancelled, CloudflareFailure
+from cross_row_enricher import enrich_cross_rows
 from database import DatabaseWriter, JobDatabase
 from input_loader import load_people
 from models import SEARCH_REVISION, PersonInput, RunConfig
@@ -258,12 +259,15 @@ class AppController:
             self.database.reset_interrupted()
             inserted = self.database.import_people(people)
             failed_requeued = self.database.reset_failed_for_new_run(self.config.input_file)
-            requeued = self.database.reset_incomplete_birthdays(self.config.input_file, SEARCH_REVISION)
+            requeued = self.database.reset_incomplete_demographics(self.config.input_file, SEARCH_REVISION)
             jobs = self.database.pending_people(self.config.input_file, self.config.max_job_attempts)
             self._total = len(people)
             self._log(f"导入识别 {len(people)} 行，新增数据库任务 {inserted} 条，待处理 {len(jobs)} 条")
             if requeued:
-                self._log(f"搜索策略升级：重试 {requeued} 条旧版空生日结果，并从 SQLite 重建实时 CSV")
+                self._log(
+                    f"搜索/字段策略升级：重试 {requeued} 条旧版生日、性别或星座不完整结果，"
+                    "并从 SQLite 重建实时 CSV"
+                )
             if failed_requeued:
                 self._log(f"新一轮启动：重新排队 {failed_requeued} 条上一轮技术失败行")
             csv_writer = RealtimeCsvWriter(
@@ -311,6 +315,22 @@ class AppController:
             if self.monitor:
                 self.monitor.stop()
             writer.flush()
+            writer.close()
+            writer = None
+            records = self.database.result_records(self.config.input_file)
+            cross_row_updates = enrich_cross_rows(records)
+            if cross_row_updates:
+                updated = self.database.update_result_records(cross_row_updates)
+                rebuilt_writer = RealtimeCsvWriter(
+                    self.config.output_dir,
+                    self.config.input_file,
+                    headers,
+                    rebuild=True,
+                )
+                for original, result, created_at in self.database.existing_results(self.config.input_file):
+                    rebuilt_writer.append(original, result, created_at)
+                rebuilt_writer.close()
+                self._log(f"跨输入行强身份信号补充 {updated} 条结果，已从 SQLite 重建实时 CSV")
             if self.stop_event.is_set():
                 self._log("任务已停止；未执行输入文件重建，已保留数据库断点")
                 self._emit_progress("已停止")

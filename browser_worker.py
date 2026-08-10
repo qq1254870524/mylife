@@ -12,9 +12,10 @@ from typing import Callable
 
 from models import PersonInput, ProfileResult, SearchResult
 from identity_matcher import select_best_identity
+from demographics_enricher import enrich_demographics
 from mylife_parser import build_search_url, parse_profile_html, parse_search_results
 from proxy_pool import ProxyBridge, ProxyGeo, ProxySpec, cleanup_profile_directory
-from search_planner import former_name_pairs, has_exact_age, merge_search_results
+from search_planner import former_name_pairs, has_exact_age, merge_search_results, past_locations
 from cloudflare_handler import wait_cloudflare_interactive
 from turnstile_harvester import page_is_cloudflare_challenge
 
@@ -448,6 +449,12 @@ class BrowserSession:
         else:
             run_search("姓名", person.first_name, person.last_name)
 
+        if person.age and not has_exact_age(search_results, person.age):
+            for old_location in past_locations(person):
+                run_search("姓名+曾用城市州邮编", person.first_name, person.last_name, old_location)
+                if has_exact_age(search_results, person.age):
+                    break
+
         if (not search_results or (person.age and not has_exact_age(search_results, person.age))):
             for alias_first, alias_last in former_name_pairs(person):
                 alias_label = f"曾用名({alias_first} {alias_last})+城市州邮编" if person.location else f"曾用名({alias_first} {alias_last})"
@@ -493,6 +500,7 @@ class BrowserSession:
                 self.capture_diagnostic("detail-failure")
                 raise RuntimeError(f"详情页采集失败 {search_result.profile_url}: {type(exc).__name__}: {exc}") from exc
         selected = select_best_birthday(person, details, len(search_results))
+        selected = enrich_demographics(person, selected, details)
         self.log(
             f"线程{self.worker_number} 匹配完成：候选={len(details)}，"
             f"选中年龄={selected.age or '空'}，生日={'已提取' if selected.birthday else '未公开'}；"

@@ -14,6 +14,16 @@ FORMER_NAME_KEYS = {
     "曾用名",
     "别名",
 }
+PAST_ADDRESS_KEYS = {
+    "pastaddress",
+    "pastaddresses",
+    "previousaddress",
+    "previousaddresses",
+    "formeraddress",
+    "曾用地址",
+    "曾经地址",
+    "历史地址",
+}
 NON_NAME_WORDS = {
     "address",
     "age",
@@ -85,3 +95,28 @@ def former_name_pairs(person: PersonInput, limit: int = 3) -> list[tuple[str, st
             if len(pairs) >= limit:
                 return pairs
     return pairs
+
+
+def past_locations(person: PersonInput, limit: int = 3) -> list[str]:
+    """从曾用地址提取不同于当前地点的 City, ST ZIP，用于补搜旧居住地索引。"""
+
+    current = re.sub(r"[^a-z0-9]", "", person.location.lower())
+    locations: list[str] = []
+    seen = {current}
+    for header, raw in person.original.items():
+        if _key(header) not in PAST_ADDRESS_KEYS:
+            continue
+        for part in re.split(r"[|;\r\n]+", str(raw or "")):
+            match = re.search(r",\s*([A-Za-z][A-Za-z .'-]{1,60}),\s*([A-Z]{2})\s+(\d{5})(?:-\d{4})?\b", part)
+            if not match:
+                continue
+            city = re.sub(r"\s+", " ", match.group(1)).strip()
+            location = f"{city}, {match.group(2)} {match.group(3)}"
+            normalized = re.sub(r"[^a-z0-9]", "", location.lower())
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            locations.append(location)
+            if len(locations) >= limit:
+                return locations
+    return locations

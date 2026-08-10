@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 
-SEARCH_REVISION = 2
+SEARCH_REVISION = 3
 
 
 @dataclass(slots=True)
@@ -60,6 +60,7 @@ class ProfileResult:
     profile_summary: str = ""
     query_strategy: str = ""
     search_coverage: str = ""
+    demographics_note: str = ""
     status: str = "已提取详情"
     message: str = ""
     search_revision: int = SEARCH_REVISION
@@ -79,6 +80,7 @@ class ProfileResult:
             "profile_summary": self.profile_summary,
             "query_strategy": self.query_strategy,
             "search_coverage": self.search_coverage,
+            "demographics_note": self.demographics_note,
             "status": self.status,
             "message": self.message,
             "search_revision": self.search_revision,
