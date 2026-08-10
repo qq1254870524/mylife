@@ -18,7 +18,7 @@ from models import SEARCH_REVISION, PersonInput, RunConfig
 from output_writer import RealtimeCsvWriter
 from proxy_pool import ProxyGeo, ProxyPool, ProxySpec, parse_proxy_line
 from runtime_monitor import RuntimeHealthMonitor
-from source_rewriter import remove_completed_rows
+from source_rewriter import RealtimeInputRewriter
 
 LogFn = Callable[[str], None]
 ProgressFn = Callable[[dict[str, int | str]], None]
@@ -58,6 +58,7 @@ class AppController:
         self._finished_clean = False
         self.diagnostics_dir = self.runtime_dir / "diagnostics" / self.log_path.stem
         self._final_status = "未开始"
+        self.input_rewriter = RealtimeInputRewriter(self.config.input_file)
 
     def _log(self, message: str) -> None:
         clean = str(message).replace("\r", " ").strip()
@@ -187,11 +188,14 @@ class AppController:
                     if not session.page:
                         session.start(fresh_profile=True)
                     results = session.process(person)
-                    for result in results:
-                        writer.put("result", job_id, person, result)
-                    writer.put("done", job_id, f"输出 {len(results)} 条")
+                    # 结果、完成状态和实时 CSV 先由唯一写线程同步落盘；确认后才删输入行。
+                    writer.put_sync("complete", job_id, person, tuple(results), f"输出 {len(results)} 条")
+                    removed = self.input_rewriter.remove_person(person)
                     challenge_streak = 0
-                    self._log(f"线程{worker_number} 完成输入第 {person.source_row} 行，输出 {len(results)} 条")
+                    self._log(
+                        f"线程{worker_number} 完成输入原第 {person.source_row} 行，输出 {len(results)} 条；"
+                        f"明确结果已实时删除输入行 {removed} 条"
+                    )
                     session.clear_person_data()
                 except Cancelled:
                     writer.put("retry", job_id, "用户停止")
@@ -257,12 +261,18 @@ class AppController:
             self._cleanup_cache()
             headers, people = load_people(self.config.input_file)
             self.database.reset_interrupted()
-            inserted = self.database.import_people(people)
+            existing_jobs = self.database.source_job_count(self.config.input_file)
+            # 实时删行会改变当前文件行号；有断点时以 SQLite 保存的原始任务为准，禁止按
+            # 缩短后的新行号重复导入或覆盖另一人的任务。
+            inserted = 0 if existing_jobs else self.database.import_people(people)
             failed_requeued = self.database.reset_failed_for_new_run(self.config.input_file)
             requeued = self.database.reset_incomplete_demographics(self.config.input_file, SEARCH_REVISION)
             jobs = self.database.pending_people(self.config.input_file, self.config.max_job_attempts)
-            self._total = len(people)
-            self._log(f"导入识别 {len(people)} 行，新增数据库任务 {inserted} 条，待处理 {len(jobs)} 条")
+            self._total = self.database.source_job_count(self.config.input_file)
+            self._log(
+                f"当前输入识别 {len(people)} 行，断点任务 {existing_jobs} 条，"
+                f"新增数据库任务 {inserted} 条，待处理 {len(jobs)} 条"
+            )
             if requeued:
                 self._log(
                     f"搜索/字段策略升级：重试 {requeued} 条旧版生日、性别或星座不完整结果，"
@@ -284,6 +294,9 @@ class AppController:
             )
             if restored:
                 self._log(f"从 SQLite 断点恢复实时 CSV：补写 {restored} 行")
+            catchup_removed = self.input_rewriter.remove_people(self.database.done_people(self.config.input_file))
+            if catchup_removed:
+                self._log(f"启动断点核对：已补删 {catchup_removed} 条此前已有明确结果的输入行")
             writer = DatabaseWriter(self.database, csv_writer, self._log)
             writer.start()
             job_queue: queue.Queue[tuple[int, PersonInput, int]] = queue.Queue()
@@ -346,15 +359,13 @@ class AppController:
                     self._emit_progress("失败")
                     self._final_status = "失败"
                 else:
-                    completed_rows = self.database.done_source_rows(self.config.input_file)
-                    removed = remove_completed_rows(self.config.input_file, completed_rows)
                     failed = summary.get("failed", 0)
                     self._finished_clean = failed == 0
                     self._final_status = "已完成" if self._finished_clean else "失败"
                     self._emit_progress(self._final_status)
                     purged = self.database.delete_source(self.config.input_file)
                     self._log(
-                        f"全部处理线程结束，已按源行号一次性重建输入文件并删除 {removed} 行明确结果；"
+                        "全部处理线程结束；每条明确结果均已在 SQLite/CSV 提交后实时删除输入行；"
                         f"清理断点任务 {purged} 条；失败保留 {failed} 行"
                     )
         except Exception as exc:

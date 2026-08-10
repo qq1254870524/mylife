@@ -101,6 +101,32 @@ class JobDatabase:
             connection.commit()
         return inserted
 
+    def source_job_count(self, source_path: Path) -> int:
+        with closing(self.connect()) as connection, connection:
+            row = connection.execute(
+                "SELECT COUNT(*) AS count FROM jobs WHERE source_path=?",
+                (str(source_path.resolve()),),
+            ).fetchone()
+        return int(row["count"] if row else 0)
+
+    @staticmethod
+    def _person_from_row(row: sqlite3.Row) -> PersonInput:
+        return PersonInput(
+            source_path=Path(row["source_path"]),
+            source_row=int(row["source_row"]),
+            headers=json.loads(row["headers_json"]),
+            original=json.loads(row["original_json"]),
+            first_value=row["first_value"],
+            first_name=row["first_name"] or "",
+            middle_name=row["middle_name"] or "",
+            last_name=row["last_name"] or "",
+            city=row["city"] or "",
+            state=row["state"] or "",
+            zip_code=row["zip_code"] or "",
+            age=row["age"] or "",
+            validation_error=row["validation_error"] or "",
+        )
+
     def reset_interrupted(self) -> None:
         with closing(self.connect()) as connection, connection:
             connection.execute(
@@ -169,25 +195,19 @@ class JobDatabase:
             jobs.append(
                 (
                     int(row["id"]),
-                    PersonInput(
-                        source_path=Path(row["source_path"]),
-                        source_row=int(row["source_row"]),
-                        headers=json.loads(row["headers_json"]),
-                        original=json.loads(row["original_json"]),
-                        first_value=row["first_value"],
-                        first_name=row["first_name"] or "",
-                        middle_name=row["middle_name"] or "",
-                        last_name=row["last_name"] or "",
-                        city=row["city"] or "",
-                        state=row["state"] or "",
-                        zip_code=row["zip_code"] or "",
-                        age=row["age"] or "",
-                        validation_error=row["validation_error"] or "",
-                    ),
+                    self._person_from_row(row),
                     int(row["attempts"]),
                 )
             )
         return jobs
+
+    def done_people(self, source_path: Path) -> list[PersonInput]:
+        with closing(self.connect()) as connection, connection:
+            rows = connection.execute(
+                "SELECT * FROM jobs WHERE source_path=? AND status='done' ORDER BY source_row",
+                (str(source_path.resolve()),),
+            ).fetchall()
+        return [self._person_from_row(row) for row in rows]
 
     def summary(self, source_path: Path) -> dict[str, int]:
         with closing(self.connect()) as connection, connection:
@@ -273,6 +293,14 @@ class DatabaseWriter(threading.Thread):
     def put(self, event: str, *payload: Any) -> None:
         self.events.put((event, payload, None))
 
+    def put_sync(self, event: str, *payload: Any) -> None:
+        done = threading.Event()
+        self.events.put((event, payload, done))
+        if not done.wait(timeout=30):
+            raise TimeoutError(f"数据库写入事件超时：{event}")
+        if self.error:
+            raise RuntimeError("数据库写入线程失败") from self.error
+
     def flush(self) -> None:
         done = threading.Event()
         self.events.put(("flush", (), done))
@@ -307,6 +335,22 @@ class DatabaseWriter(threading.Thread):
             )
             if cursor.rowcount:
                 self.csv_writer.append(person.original, data, now)
+        elif event == "complete":
+            job_id, person, results, message = payload
+            assert isinstance(person, PersonInput)
+            for result in results:
+                assert isinstance(result, ProfileResult)
+                data = result.as_dict()
+                cursor = connection.execute(
+                    "INSERT OR IGNORE INTO results(job_id,result_index,profile_url,result_json,created_at) VALUES(?,?,?,?,?)",
+                    (job_id, result.result_index, result.profile_url, json.dumps(data, ensure_ascii=False), now),
+                )
+                if cursor.rowcount:
+                    self.csv_writer.append(person.original, data, now)
+            connection.execute(
+                "UPDATE jobs SET status='done', message=?, updated_at=? WHERE id=?",
+                (str(message), now, int(job_id)),
+            )
         elif event == "done":
             job_id, message = payload
             connection.execute(

@@ -7,7 +7,8 @@ from pathlib import Path
 
 import openpyxl
 
-from source_rewriter import remove_completed_rows
+from input_loader import load_people
+from source_rewriter import RealtimeInputRewriter, remove_completed_rows
 
 
 class SourceRewriterTests(unittest.TestCase):
@@ -41,6 +42,52 @@ class SourceRewriterTests(unittest.TestCase):
             workbook.close()
             self.assertEqual(rows, [("name", "note"), ("John Doe", "b")])
             self.assertEqual(other_rows, [("name", "note"), ("Other Person", "must stay")])
+
+    def test_realtime_csv_matches_full_row_and_removes_duplicate_one_at_a_time(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "input.csv"
+            path.write_text(
+                "name,note\nJane Doe,a\nJane Doe,b\nJane Doe,a\n",
+                encoding="utf-8-sig",
+            )
+            _headers, people = load_people(path)
+            rewriter = RealtimeInputRewriter(path)
+            self.assertEqual(rewriter.remove_person(people[0]), 1)
+            with path.open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.reader(handle))
+            self.assertEqual(rows, [["name", "note"], ["Jane Doe", "b"], ["Jane Doe", "a"]])
+            self.assertEqual(rewriter.remove_person(people[2]), 1)
+            with path.open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.reader(handle))
+            self.assertEqual(rows, [["name", "note"], ["Jane Doe", "b"]])
+
+    def test_realtime_xlsx_matches_original_and_preserves_other_sheet(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "input.xlsx"
+            workbook = openpyxl.Workbook()
+            workbook.active.append(["name", "note"])
+            workbook.active.append(["Jane Doe", "delete"])
+            workbook.active.append(["John Doe", "keep"])
+            workbook.create_sheet("keep").append(["must", "stay"])
+            workbook.save(path)
+            workbook.close()
+            _headers, people = load_people(path)
+            self.assertEqual(RealtimeInputRewriter(path).remove_person(people[0]), 1)
+            workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+            self.assertEqual(
+                list(workbook.active.iter_rows(values_only=True)),
+                [("name", "note"), ("John Doe", "keep")],
+            )
+            self.assertEqual(list(workbook["keep"].iter_rows(values_only=True)), [("must", "stay")])
+            workbook.close()
+
+    def test_realtime_delimited_txt_keeps_header(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "input.txt"
+            path.write_text("name,city\nJane Doe,Austin\nJohn Doe,Dallas\n", encoding="utf-8")
+            _headers, people = load_people(path)
+            self.assertEqual(RealtimeInputRewriter(path).remove_person(people[0]), 1)
+            self.assertEqual(path.read_text(encoding="utf-8-sig"), "name,city\nJohn Doe,Dallas\n")
 
 
 if __name__ == "__main__":

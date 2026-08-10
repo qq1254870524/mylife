@@ -11,6 +11,8 @@ from models import ProfileResult, RunConfig
 
 
 class FakeBrowserSession:
+    observed_input_counts: list[int] = []
+
     def __init__(self, **_kwargs: object) -> None:
         self.page = None
 
@@ -18,6 +20,9 @@ class FakeBrowserSession:
         self.page = object()
 
     def process(self, person: object) -> list[ProfileResult]:
+        source = getattr(person, "source_path")
+        with source.open("r", encoding="utf-8-sig", newline="") as handle:
+            self.observed_input_counts.append(max(0, len(list(csv.reader(handle))) - 1))
         return [
             ProfileResult(1, "https://www.mylife.com/jane-doe/e1", full_name="Jane Doe", birthday="March 7, 1984", gender="Female", zodiac="Pisces (February 19 - March 20)"),
         ]
@@ -37,25 +42,29 @@ class ControllerOfflineTests(unittest.TestCase):
         self.assertTrue(_is_proxy_network_error("Page.goto: net::ERR_SOCKS_CONNECTION_FAILED"))
         self.assertFalse(_is_proxy_network_error("selector not found"))
 
-    def test_full_pipeline_realtime_output_then_single_rebuild(self) -> None:
+    def test_full_pipeline_deletes_each_explicit_result_in_realtime(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             source = root / "people.csv"
-            source.write_text("first_name,last_name,note\nJane,Doe,keep\n", encoding="utf-8-sig")
+            source.write_text(
+                "first_name,last_name,note\nJane,Doe,first\nJohn,Doe,second\n",
+                encoding="utf-8-sig",
+            )
             output = root / "output"
-            config = RunConfig(source, output, thread_count=2, browser_mode="无头")
+            config = RunConfig(source, output, thread_count=1, browser_mode="无头")
             progress_states: list[dict[str, int | str]] = []
             controller = AppController(config, progress=progress_states.append)
+            FakeBrowserSession.observed_input_counts = []
             with patch("controller.BrowserSession", FakeBrowserSession):
                 controller.run()
-            current_run_states = [state for state in progress_states if state.get("total") == 1]
+            current_run_states = [state for state in progress_states if state.get("total") == 2]
             self.assertTrue(current_run_states)
             self.assertTrue(any(state.get("output", "").endswith("people_MyLife结果.csv") for state in current_run_states))
             result_path = output / "people_MyLife结果.csv"
             with result_path.open("r", encoding="utf-8-sig", newline="") as handle:
                 rows = list(csv.DictReader(handle))
-            self.assertEqual(len(rows), 1)
-            self.assertEqual(rows[0]["note"], "keep")
+            self.assertEqual(len(rows), 2)
+            self.assertEqual([row["note"] for row in rows], ["first", "second"])
             self.assertEqual(list(rows[0])[-4:], ["生日", "性别", "星座", "备注原因"])
             self.assertIn("搜索方式：", rows[0]["备注原因"])
             self.assertEqual(rows[0]["生日"], "March 7, 1984")
@@ -64,6 +73,7 @@ class ControllerOfflineTests(unittest.TestCase):
             with source.open("r", encoding="utf-8-sig", newline="") as handle:
                 remaining = list(csv.reader(handle))
             self.assertEqual(remaining, [["first_name", "last_name", "note"]])
+            self.assertEqual(sorted(FakeBrowserSession.observed_input_counts), [1, 2])
             self.assertFalse((output / ".mylife_runtime" / "profiles").exists())
 
     def test_proxy_thread_limit_validation(self) -> None:
