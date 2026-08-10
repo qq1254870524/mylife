@@ -1,15 +1,34 @@
 CHANGED_BRANCH: main
-CHANGED_FIELDS: age_tiered_multi_signal_identity_match+birthday_gender_zodiac_output+location_first_name_fallback+detail_x_then_back+source_row_rebuild+counted_csv_replay+runtime_health_devtools+proxy_channel_refresh
+CHANGED_FIELDS: unique_result_confirmation+live_document_403_revalidation+deep_multi_signal_identity_match+birthday_gender_zodiac_remark_output+current_name_past_alias_search+stable_get_search_return+cross_row_demographic_enrichment+source_row_rebuild+counted_csv_replay+runtime_health_devtools+persistent_proxy_worker_recovery
 BASE_COMMIT: 24588fa8d50d2fbd5611d9a040b9c0452966ebb5
-FORMAT: git apply compatible UTF-8 patch; artifact files excluded to avoid recursion.
+FORMAT: git apply compatible UTF-8 patch; four transaction artifacts and original hash record excluded to avoid recursion.
 
 diff --git a/CHANGELOG.md b/CHANGELOG.md
-index f9cf645..d3845c8 100644
+index f9cf645..51e88fd 100644
 --- a/CHANGELOG.md
 +++ b/CHANGELOG.md
-@@ -1,5 +1,21 @@
+@@ -1,5 +1,40 @@
  # 更新日志
-
+ 
++## v1.1.1 - 2026-08-11
++
++- 修复初始 HTTP 403 已经通过挑战并渲染出有效搜索结果后仍被当成网络/Cloudflare 故障关闭的问题；判定会在挑战结束后连续重读当前实时文档，不再用历史响应覆盖已打开页面。
++- 搜索某一步的全部分页合计只有 1 个候选时，直接确定该人并停止姓名/曾用地点/曾用名扩展；备注记录“唯一结果直接确认”。
++- 结果 CSV 最后一列新增 `备注原因`，逐行写明使用的搜索方式、匹配状态、命中证据，以及没有搜索到或生日未公开的具体原因。
++- 地点搜索出现候选但没有输入年龄时，继续姓名搜索并合并去重；仍无同龄候选时再尝试经过噪声过滤的曾用名，修复“找到其他人就过早停止”的漏搜。
++- 新增搜索策略修订号；升级后旧版空生日行只自动重试一次，实时 CSV 从 SQLite 精确重建，不重复已经有生日的结果。
++- 新一轮 GUI 启动会释放上一轮达到重试上限的技术失败行，不必等完整批次结束后才再次处理。
++- 页面年龄缺失但完整生日可以推导出输入年龄时，该候选进入同龄优先池；年龄只用于筛选和校验，不编造具体生日。
++- 审计 3,558 行输入后新增原始 `query` 手机号强信号：其中 1,532 行的查询手机号不在 `phone_numbers`，旧版会漏掉；同时补用房产 JSON 地址、去年龄后的亲属/关联人姓名。
++- 当前地点和姓名仍无同龄目标时，最多补搜 3 个曾用 City/State/ZIP；完全同龄缺失时增加经过身份阈值过滤的相差 1 岁候选层。
++- 新增隐藏结构化 `birthDate/dateOfBirth/gender/sex` 提取、严格同身份重复档案字段补充，以及由完整生日确定星座；备注写明字段来源。
++- `SEARCH_REVISION=3` 会一次性重跑旧版生日、性别或星座不完整结果，而不只重跑空生日。
++- 新增跨输入行一致性补充：同姓名并共享完整手机号/邮箱/当前地址的结果组，在生日/性别/星座无冲突时补空字段；停止或完成时写回 SQLite 并重建 CSV。
++- 详情页关闭弹层后不再调用浏览器历史后退；程序改用已保存的 GET 搜索地址返回列表，消除 Cloudflare/POST 历史记录引发的 `ERR_CACHE_MISS` 短暂错误页。
++- 本地 SOCKS 桥连接远端动态代理失败时会先内部短重试 3 次，瞬时故障不再立即传给浏览器。
++- 修复代理短暂不可用后四线程变三线程：错误浏览器立即关闭，工作线程保持存活并循环检测/刷新专属代理；恢复后使用全新 profile 继续，任务无损回队列。
++- GUI 与 `health.json` 新增备注列实时计数，并修正 `unique_birthdays` 为真正的不同生日数量。
++
 +## v1.1.0 - 2026-08-11
 +
 +- 输入识别新增年龄，并可从 `current_address` 补齐城市、州和邮编。
@@ -27,67 +46,127 @@ index f9cf645..d3845c8 100644
 +- 增加 `--auto-start`，可载入上次 GUI 配置后直接重新开始。
 +
  ## v1.0.1 - 2026-08-11
-
+ 
  - 修复 Windows CMD 启动器使用纯 LF 换行时被 `cmd.exe` 错位解析的问题。
+diff --git a/INPUT_SIGNAL_AUDIT_20260811.md b/INPUT_SIGNAL_AUDIT_20260811.md
+new file mode 100644
+index 0000000..20e8467
+--- /dev/null
++++ b/INPUT_SIGNAL_AUDIT_20260811.md
+@@ -0,0 +1,37 @@
++# MyLife 输入资料与身份信号审计（2026-08-11）
++
++输入：`测试文件1.xlsx`，共 3,558 行。
++
++## 可利用字段
++
++| 信号 | 可用行数 | 本版用法 |
++|---|---:|---|
++| 原始 `query` 搜索手机号 | 3,558 | 结合 `search_type=手机号` 纳入完整手机号强匹配 |
++| `query` 不在 `phone_numbers` 中 | 1,532 | 旧版遗漏，本版补入；这是本次最重要的新身份信号 |
++| `current_address` | 3,558 | 完整地址、邮编、门牌号+街道、城市州分层匹配 |
++| `current_address_property_info.Address` | 3,558 | JSON 地址作为当前地址第二证据源 |
++| 可提取不同曾用 City/State/ZIP | 3,182 | 当前地点和姓名搜索无同龄目标后，最多补搜 3 个曾用地点；平均每行 2.66 个 |
++| `email_addresses` | 2,810 | 完整邮箱强匹配 |
++| 经过噪声过滤的有效曾用名 | 921 | 主姓名仍无同龄目标时补搜；过滤 `resided/lives/address` 等说明文字和无关人员 |
++| `possible_relatives` | 3,387 | 去掉 `(Age N)` 后按亲属姓名匹配，多名共同亲属提升可信度 |
++| `possible_associates` | 3,455 | 去掉年龄后作为辅助群体关系证据 |
++| `middle_name` | 79 | 保留在完整姓名中参与姓名一致性比较 |
++
++## 最优判断顺序
++
++1. **唯一结果**：任一搜索步骤的全部分页合计只有 1 人时直接确定并停止扩搜。
++2. **年龄池**：多候选时完全同龄优先；没有完全同龄时，只把姓名/身份分达到阈值的相差 1 岁候选作为第二层；再没有才进入全候选综合匹配。
++3. **唯一强信号**：原始查询手机号、公开完整手机号/后 7 位、完整邮箱、完整当前/曾用地址。
++4. **地址组合信号**：ZIP、门牌号+街道、城市+州；门牌号前 2 位和电话区号只能作弱证据。
++5. **姓名信号**：完整姓名、名姓组合、曾用名；说明文字和无关姓名不进入搜索。
++6. **关系网信号**：共同亲属优先，关联人辅助；输入中的 `(Age N)` 先清除，避免旧版姓名比较失效。
++7. **冲突控制**：年龄、公开电话、公开邮箱冲突会扣分；生日与页面年龄冲突会记录到备注，不能靠“有生日”覆盖更强的身份关系。
++
++## 字段补全规则
++
++- **生日**：只接受 MyLife 可见完整日期或 HTML 结构化字段中的完整年份日期；月/日不含年份时不输出，不根据年龄编造某一天。
++- **性别**：读取可见 `Gender/Sex`、指定 span，以及 HTML 结构化 `gender/sex`；严格同姓名、年龄相容且共享完整电话/邮箱/地址的重复档案可补充缺失性别。
++- **星座**：优先读取页面星座；页面未给但已有完整生日时确定性计算，并在 `备注原因` 写明来源。
++- **搜索路线**：当前姓名+城市州邮编 → 姓名 → 最多 3 个曾用城市州邮编 → 有效曾用名地点/姓名；各路线候选按 profile URL 合并去重后统一匹配。
++- **重试**：搜索/字段策略修订号升级后，只重跑上一版生日、性别或星座不完整的行一次；已有完整结果保留。
++- **跨行补充**：同姓名且共享完整手机号、邮箱或当前地址的多条输入会组成同一身份组；组内字段只有一个非冲突值时，停止或完成批次时补到空字段并从 SQLite 重建 CSV。
 diff --git a/README.md b/README.md
-index c155a6f..a28629a 100644
+index c155a6f..bdbadb0 100644
 --- a/README.md
 +++ b/README.md
 @@ -1,6 +1,6 @@
  # MyLife 数据采集正式版
-
+ 
 -版本：`1.0.0`
-+版本：`1.1.0`
-
++版本：`1.1.1`
+ 
  ## 启动
-
-@@ -13,16 +13,20 @@
+ 
+@@ -13,16 +13,22 @@
  启动器会先检查依赖；已经安装的依赖全部跳过，缺少的依赖才会自动下载。GUI 支持：
-
+ 
  - `TXT / CSV / XLSX / XLSM` 自动识别；
 -- 输入任意列顺序，优先识别名、姓、城市、州、邮编、完整姓名和地址；
 +- 输入任意列顺序，识别名、姓、年龄、城市、州、邮编、完整姓名、当前地址、曾用地址、手机号、邮箱和关联资料；
  - 原输入列原样位于结果前部，MyLife 结果字段追加在后部；
  - 多浏览器处理线程 + 单独 SQLite 写入线程；
  - SQLite `WAL` 断点状态和 UTF-8 BOM CSV 实时落盘；
- - “姓名+城市州邮编”优先，找不到时自动回退“姓名”；
+-- “姓名+城市州邮编”优先，找不到时自动回退“姓名”；
 -- 遍历搜索结果分页，再逐条进入详情采集生日；
-+- 先采集“姓名+城市州邮编”的全部分页候选；只有该搜索没有结果时才回退“姓名”搜索；
-+- 逐条进入详情采集年龄、生日、性别、星座，关闭可见弹层后后退一步回搜索列表；
-+- 先限定同龄候选，再以姓名、完整电话、电话前三位、邮箱、当前/曾用地址、邮编、门牌号、城市州、亲属和关联人多信号评分；
++- “姓名+城市州邮编”优先；任一搜索步骤的全部分页合计只有 1 人时直接确定；地点结果为空时自动回退“姓名”搜索，多候选且只有异龄候选时继续扩展并合并去重；
++- 主姓名仍没有同龄候选时尝试经过噪声过滤的曾用名，过滤地址文字和无关人员姓名；
++- 逐条进入详情采集年龄、生日、性别、星座，关闭可见弹层后使用保存的 GET 地址稳定返回搜索列表；
++- 先限定同龄候选，再以原始查询手机号、公开完整电话、邮箱、当前/曾用地址、房产 JSON 地址、邮编、门牌号、城市州、去年龄后的亲属和关联人多信号评分；
++- 无完全同龄候选时先检查经过姓名/身份阈值过滤的相差 1 岁候选，再回退全候选；当前地点与姓名仍无同龄目标时最多补搜 3 个曾用地点；
++- 提取可见及 HTML 结构化完整生日/性别；星座可由完整生日确定，严格同身份重复档案可补充缺失字段；
 +- 只输出身份得分最高的一位，生日是否公开不会覆盖更强身份关系；
  - 小窗口/无头两种浏览器模式；
- - 动态 SOCKS5 代理池、连通性检查、IP 地理时区/语言同步、3 分钟刷新冷却；
+-- 动态 SOCKS5 代理池、连通性检查、IP 地理时区/语言同步、3 分钟刷新冷却；
++- 动态 SOCKS5 代理池、连通性检查、IP 地理时区/语言同步、3 分钟刷新冷却；代理短暂失效时关闭错误浏览器但保持工作线程，恢复后以全新 profile 继续；
  - 停止时结束所有工作线程和浏览器，并删除浏览器缓存；
  - 正常批次结束后才一次性原子重建输入文件，不在处理中删除 XLSX 行。
 +- `health.json` 实时记录数据库、CSV 字段数量、线程、日志和浏览器诊断状态。
-
+ 
  ## 输入建议
-
-@@ -60,7 +64,7 @@ Patchright 的真 headless 模式会影响 Managed Turnstile token 签发，因
+ 
+@@ -50,7 +56,7 @@ host:port:user:password|https://刷新链接
+ 
+ GUI 可用 `＋` 添加，用 `－` 删除。首次启动会从本机 `设计思路.txt` 自动读取符合格式的代理行；GUI 保存项位于 `.mylife_gui_settings.json`，该文件不会进入 Git 仓库或 Release。
+ 
+-Chromium 不支持带账号密码的 SOCKS5 直连，`socks_bridge.py` 会为每套代理自动创建仅监听 `127.0.0.1` 的本地 SOCKS5 桥，再把浏览器固定绑定到对应代理。域名请求会原样交给远端代理解析。
++Chromium 不支持带账号密码的 SOCKS5 直连，`socks_bridge.py` 会为每套代理自动创建仅监听 `127.0.0.1` 的本地 SOCKS5 桥，再把浏览器固定绑定到对应代理。域名请求会原样交给远端代理解析；远端动态代理出现瞬时连接失败时，本地桥会先内部短重试 3 次，再决定是否向浏览器返回失败。
+ 
+ Patchright 的真 headless 模式会影响 Managed Turnstile token 签发，因此 GUI 的“无头”模式内部仍运行真实 Chrome，再只隐藏本次会话新增的窗口；不会触碰用户已有 Chrome 窗口。“小窗口”则保留可见浏览器便于实时观察。
+ 
+@@ -60,7 +66,7 @@ Patchright 的真 headless 模式会影响 Managed Turnstile token 签发，因
  - SQLite：`输出目录/.mylife_runtime/state.sqlite3`
  - 日志：`输出目录/logs/run_YYYYMMDD_HHMMSS.log`
-
+ 
 -CSV 每写一行都会 `flush + fsync`。输出文件首列保持为输入首列；批次正常结束后，输入文件中首列已经出现在输出首列的整行会被一次性删除。技术失败且没有明确输出的行会保留，供下次断点继续。
-+CSV 每写一行都会 `flush + fsync`。输出完整保留原输入列，并只在最后追加 `生日`、`性别`、`星座`。批次正常结束后按原始源行号一次性删除已经明确输出的行；重复首列或完全相同的重复输入不会误删、漏写。技术失败行保留供下次继续。SQLite 已有结果可自动回放补齐被意外删除的实时 CSV，回放不会重复已有行。
-
++CSV 每写一行都会 `flush + fsync`。输出完整保留原输入列，并在最后追加 `生日`、`性别`、`星座`、`备注原因`；备注会写明最终命中的搜索方式、完整搜索范围、结果状态、命中证据或未搜索到的原因。批次正常结束后按原始源行号一次性删除已经明确输出的行；重复首列或完全相同的重复输入不会误删、漏写。技术失败行保留供下次继续。SQLite 已有结果可自动回放补齐被意外删除的实时 CSV；搜索策略升级时仅重试旧版空生日结果并精确重建 CSV，不重复已有生日行。
+ 
  ## 模块
-
-@@ -71,6 +75,7 @@ CSV 每写一行都会 `flush + fsync`。输出文件首列保持为输入首列
+ 
+@@ -71,6 +77,11 @@ CSV 每写一行都会 `flush + fsync`。输出文件首列保持为输入首列
  | `gui.py` | GUI、代理增删、实时监控 |
  | `controller.py` | 生命周期、线程、断点、批次收尾 |
  | `browser_worker.py` | Patchright 浏览器、人类式节奏、搜索/详情流程 |
 +| `identity_matcher.py` | 年龄分层、多信号身份评分、唯一候选选择 |
++| `search_planner.py` | 同龄候选判断、曾用名清洗、跨搜索候选合并去重 |
++| `demographics_enricher.py` | 严格同身份档案字段补充、完整生日确定星座 |
++| `cross_row_enricher.py` | 同姓名+完整电话/邮箱/地址的跨输入行无冲突字段补充 |
++| `remark_builder.py` | 生成搜索方式、命中/未命中原因备注 |
  | `cloudflare_handler.py` | 持续轮询晚加载 Turnstile 控件并执行真实鼠标点击 |
  | `turnstile_harvester.py` | 已有 Cloudflare/Turnstile 模块（正式版未改） |
  | `proxy_pool.py` | 代理解析、检查、刷新、地理信息、本地桥 |
-@@ -80,6 +85,7 @@ CSV 每写一行都会 `flush + fsync`。输出文件首列保持为输入首列
+@@ -80,6 +91,7 @@ CSV 每写一行都会 `flush + fsync`。输出文件首列保持为输入首列
  | `database.py` | SQLite WAL 与单写线程 |
  | `output_writer.py` | UTF-8 BOM CSV 实时输出 |
  | `source_rewriter.py` | 批次结束后一次性重建输入 |
 +| `runtime_monitor.py` | 数据库/CSV/线程/日志实时健康快照 |
  | `models.py` | 数据模型 |
-
+ 
  ## 验证
 diff --git a/RELEASE_NOTES_v1.1.0.md b/RELEASE_NOTES_v1.1.0.md
 new file mode 100644
@@ -114,27 +193,60 @@ index 0000000..cd2b5f5
 +
 +- 离线单元/集成测试覆盖身份评分、年龄回退、电话/地址弱证据、重复输入、断点回放、输入重建和三列解析。
 +- MyLife 真实浏览器链路验证了全部候选、详情采集、后退搜索列表、生日/性别/星座输出和批次清理。
+diff --git a/RELEASE_NOTES_v1.1.1.md b/RELEASE_NOTES_v1.1.1.md
+new file mode 100644
+index 0000000..f7eec91
+--- /dev/null
++++ b/RELEASE_NOTES_v1.1.1.md
+@@ -0,0 +1,24 @@
++# MyLife v1.1.1 正式版
++
++## 本版更新
++
++- CSV 最后一列新增 `备注原因`。
++- 备注会说明 `姓名+城市州邮编` 或姓名回退搜索、匹配置信度和证据、无结果原因、生日未公开原因。
++- 地点结果没有同龄人时继续姓名搜索并合并全部候选，必要时尝试过滤后的曾用名；备注同时记录最终命中方式和完整搜索范围。
++- 任一搜索步骤的全部分页合计只有 1 人时直接确定，不再因年龄不同继续扩搜。
++- 初始 403 挑战响应后来已经渲染为有效搜索结果时保留当前浏览器继续采集，不再误报网络问题后关闭。
++- 旧版空生日结果随搜索策略升级自动重试一次，已有生日结果保留并从 SQLite 重建到 CSV。
++- 只提取网页明确给出的完整生日；年龄用于筛选和校验，不生成猜测日期。
++- 输入中的原始查询手机号、房产 JSON 地址、曾用地点、去年龄后的亲属/关联人姓名全部进入判断；查询手机号补上了 1,532 行旧版没有覆盖的强信号。
++- HTML 隐藏结构化生日/性别也会提取；同身份重复档案可补缺失字段；有完整生日时自动确定星座并记录来源。
++- 详情采集后使用固定 GET 搜索地址返回列表，不再回放浏览器 POST 历史，消除 `ERR_CACHE_MISS` 闪断页面。
++- 本地 SOCKS 桥会先在内部重试远端动态代理的瞬时连接失败，减少浏览器出现断网页。
++- 动态代理通道异常时关闭错误浏览器但保留工作线程；循环检测/刷新成功后用全新 profile 恢复，四个线程不会永久变成三个。
++- GUI/`health.json` 实时统计备注数量，并正确统计不同生日数量。
++
++## 验证重点
++
++- 备注列始终位于生日、性别、星座之后。
++- 地点搜索命中同龄候选时不会额外执行姓名搜索；零结果或只有异龄候选时才扩展姓名/曾用名搜索。
++- 匹配、无结果和输入无效三种情况都生成明确备注。
++- 浏览器返回列表不再调用 `go_back()`，运行日志不再产生 `ERR_CACHE_MISS`。
 diff --git a/browser_worker.py b/browser_worker.py
-index 4a0df04..7dea3e1 100644
+index 4a0df04..7c719c1 100644
 --- a/browser_worker.py
 +++ b/browser_worker.py
-@@ -6,10 +6,12 @@ import threading
+@@ -6,18 +6,30 @@ import threading
  import time
  import sys
  import ctypes
 +from datetime import datetime
  from pathlib import Path
  from typing import Callable
-
+ 
  from models import PersonInput, ProfileResult, SearchResult
 +from identity_matcher import select_best_identity
++from demographics_enricher import enrich_demographics
  from mylife_parser import build_search_url, parse_profile_html, parse_search_results
  from proxy_pool import ProxyBridge, ProxyGeo, ProxySpec, cleanup_profile_directory
++from search_planner import former_name_pairs, has_exact_age, merge_search_results, past_locations
  from cloudflare_handler import wait_cloudflare_interactive
-@@ -18,6 +20,14 @@ from turnstile_harvester import page_is_cloudflare_challenge
+ from turnstile_harvester import page_is_cloudflare_challenge
+ 
  LogFn = Callable[[str], None]
-
-
+ 
+ 
 +def select_best_birthday(
 +    person: PersonInput,
 +    details: list[ProfileResult],
@@ -146,7 +258,7 @@ index 4a0df04..7dea3e1 100644
  def _chrome_window_handles() -> set[int]:
      if sys.platform != "win32":
          return set()
-@@ -77,6 +87,7 @@ class BrowserSession:
+@@ -77,6 +89,7 @@ class BrowserSession:
          stop_event: threading.Event,
          log: LogFn,
          max_search_pages: int = 50,
@@ -154,7 +266,7 @@ index 4a0df04..7dea3e1 100644
      ) -> None:
          self.worker_number = worker_number
          self.profile_dir = profile_dir
-@@ -86,6 +97,7 @@ class BrowserSession:
+@@ -86,6 +99,7 @@ class BrowserSession:
          self.stop_event = stop_event
          self.log = log
          self.max_search_pages = max_search_pages
@@ -162,15 +274,15 @@ index 4a0df04..7dea3e1 100644
          self.playwright = None
          self.context = None
          self.page = None
-@@ -93,6 +105,7 @@ class BrowserSession:
+@@ -93,6 +107,7 @@ class BrowserSession:
          self.challenge_failures = 0
          self._profile_geolocation_applied = False
          self._hidden_windows: set[int] = set()
 +        self._captured_success = False
-
+ 
      def _cancelled(self) -> bool:
          return self.stop_event.is_set()
-@@ -142,6 +155,7 @@ class BrowserSession:
+@@ -142,6 +157,7 @@ class BrowserSession:
          self.context = self.playwright.chromium.launch_persistent_context(**options)
          self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
          self.page.set_default_timeout(30_000)
@@ -178,10 +290,10 @@ index 4a0df04..7dea3e1 100644
          if hide_window:
              self._hidden_windows = _hide_new_chrome_windows(previous_windows)
              if not self._hidden_windows:
-@@ -150,6 +164,43 @@ class BrowserSession:
+@@ -150,6 +166,43 @@ class BrowserSession:
          self._profile_geolocation_applied = False
          self.log(f"线程{self.worker_number} 浏览器已启动（{self.mode}）")
-
+ 
 +    def _attach_debug_events(self) -> None:
 +        if not self.page:
 +            return
@@ -222,24 +334,85 @@ index 4a0df04..7dea3e1 100644
      def close(self) -> None:
          context, self.context = self.context, None
          if context:
-@@ -249,6 +300,13 @@ class BrowserSession:
+@@ -216,6 +269,30 @@ class BrowserSession:
+         except Exception:
+             return ""
+ 
++    @staticmethod
++    def _is_usable_mylife_page(url: str, html: str, body: str, title: str) -> bool:
++        """确认当前文档已经是可采集页面，不能用历史 403 响应覆盖实时页面状态。"""
++        url_value = str(url or "")
++        body_value = str(body or "")
++        title_value = str(title or "")
++        lowered = f"{title_value} {body_value[:2000]}".casefold()
++        if "sorry, you have been blocked" in lowered or "attention required" in title_value.casefold():
++            return False
++        if "pub-multisearch.pubview" in url_value:
++            results, _next_url, no_results = parse_search_results(html, url_value)
++            return bool(
++                results
++                or no_results
++                or re.search(r"\bwe\s+found\s+\d+\s+results?\b", body_value, re.I)
++                or "search-result-heading" in str(html or "")
++            )
++        if re.search(r"/e\d+(?:[/?#]|$)", url_value, re.I):
++            return bool(
++                re.search(r"reputation\s*&\s*contact\s+details|has\s+court\s+or\s+arrest\s+records", title_value, re.I)
++                or re.search(r"\b(?:currently\s+lives|places\s+lived|phone\s+numbers?|email\s+addresses?)\b", body_value, re.I)
++            )
++        return False
++
+     def _handle_cloudflare(self) -> None:
+         if not page_is_cloudflare_challenge(self.page):
+             return
+@@ -240,15 +317,41 @@ class BrowserSession:
+         self._apply_profile_geolocation()
+         body = self._body_text()
+         title = str(self.page.title() or "")
++        html = str(self.page.content() or "")
++        usable = self._is_usable_mylife_page(str(self.page.url or url), html, body, title)
++        status = int(getattr(response, "status", 0) or 0)
++        # Cloudflare 的初始 403 响应对象不会随客户端挑战完成而更新；页面可能在本次
++        # 读取后几百毫秒才替换为正常结果。先连续重读实时文档，再决定是否重建浏览器。
++        if status == 403 and not usable:
++            for _ in range(20):
++                self._check_cancelled()
++                self.page.wait_for_timeout(350)
++                body = self._body_text()
++                title = str(self.page.title() or "")
++                html = str(self.page.content() or "")
++                usable = self._is_usable_mylife_page(str(self.page.url or url), html, body, title)
++                if usable:
++                    break
+         blocked = "sorry, you have been blocked" in body.lower() or "attention required" in title.lower()
+-        if blocked or (response and response.status == 403 and not body.strip()):
++        if usable and status == 403:
++            self.log(
++                f"线程{self.worker_number} 初始 HTTP=403 后已渲染有效 MyLife 页面，保留当前浏览器继续采集"
++            )
++        elif blocked or status == 403:
+             self.challenge_failures += 1
+             raise CloudflareFailure("Cloudflare 拒绝当前出口 IP")
+         # 验证通过后的首次响应偶尔只有空壳 HTML；同一已验证上下文重载一次。
+-        if "pub-multisearch.pubview" in url and len(body.strip()) < 80:
++        if "pub-multisearch.pubview" in url and len(body.strip()) < 80 and not usable:
              self.page.reload(wait_until="domcontentloaded", timeout=60_000)
              self._pause(1.5, 3.0)
              self._handle_cloudflare()
 +        self.log(
-+            f"线程{self.worker_number} DevTools 导航：HTTP={getattr(response, 'status', '')} "
-+            f"title={title[:100]} html_chars={len(self.page.content())} url={self.page.url}"
++            f"线程{self.worker_number} DevTools 导航：HTTP={status or ''} "
++            f"title={title[:100]} html_chars={len(html)} url={self.page.url}"
 +        )
 +        if not self._captured_success and "mylife.com" in self.page.url:
 +            self.capture_diagnostic("first-success", include_html=False)
 +            self._captured_success = True
          self._human_scroll()
-
+ 
      def clear_person_data(self) -> None:
-@@ -298,13 +356,64 @@ class BrowserSession:
+@@ -298,13 +401,53 @@ class BrowserSession:
              self._pause(0.8, 1.8)
          return all_results
-
+ 
 -    def _collect_profile(self, result: SearchResult, index: int, strategy: str) -> ProfileResult:
 +    def _close_visible_overlay(self) -> bool:
 +        """关闭详情页可见弹层的 X；找不到时保持页面不变。"""
@@ -268,28 +441,17 @@ index 4a0df04..7dea3e1 100644
 +        return False
 +
 +    def _return_to_search_list(self, search_url: str) -> None:
-+        """按用户指定动作：关闭详情弹层，再后退一步回搜索列表。"""
++        """关闭详情弹层后用固定 GET 地址回列表，绕开历史 POST 的 ERR_CACHE_MISS。"""
 +        self._close_visible_overlay()
-+        try:
-+            self.page.go_back(wait_until="commit", timeout=60_000)
-+            self._pause(0.5, 1.2)
-+            self._handle_cloudflare()
-+        except Exception as exc:
-+            self.log(f"线程{self.worker_number} 后退搜索列表首次失败，准备直达兜底：{type(exc).__name__}: {exc}")
-+            try:
-+                self.page.wait_for_timeout(1_200)
-+            except Exception:
-+                pass
 +        if "pub-multisearch.pubview" not in str(self.page.url or ""):
 +            try:
-+                self.page.goto("about:blank", wait_until="commit", timeout=15_000)
 +                self._navigate(search_url)
 +            except Exception as exc:
 +                # 详情数据已经取得，返回列表失败不应把完整候选误判为采集失败；下一候选仍可直达 URL。
-+                self.log(f"线程{self.worker_number} 搜索列表直达兜底失败，保留已采集详情：{type(exc).__name__}: {exc}")
++                self.log(f"线程{self.worker_number} 固定 GET 搜索列表返回失败，保留已采集详情：{type(exc).__name__}: {exc}")
 +                self.capture_diagnostic("return-search-failure")
 +        if "pub-multisearch.pubview" in str(self.page.url or ""):
-+            self.log(f"线程{self.worker_number} 已后退一步回到搜索列表页面")
++            self.log(f"线程{self.worker_number} 已通过固定 GET 搜索地址返回列表页面")
 +
 +    def _collect_profile(self, result: SearchResult, index: int, strategy: str, search_url: str) -> ProfileResult:
          self._navigate(result.profile_url)
@@ -300,9 +462,9 @@ index 4a0df04..7dea3e1 100644
          )
 +        self._return_to_search_list(search_url)
          return parsed
-
+ 
      def process(self, person: PersonInput) -> list[ProfileResult]:
-@@ -320,18 +429,20 @@ class BrowserSession:
+@@ -320,18 +463,60 @@ class BrowserSession:
                      message=person.validation_error,
                  )
              ]
@@ -310,37 +472,99 @@ index 4a0df04..7dea3e1 100644
 -        if person.location:
 -            strategies.append(("姓名+城市州邮编", build_search_url(person.first_name, person.last_name, person.location)))
 -        strategies.append(("姓名", build_search_url(person.first_name, person.last_name)))
-+        location_strategy = ("姓名+城市州邮编", build_search_url(person.first_name, person.last_name, person.location))
-+        name_strategy = ("姓名", build_search_url(person.first_name, person.last_name))
          search_results: list[SearchResult] = []
-         strategy_used = ""
-+        strategies = [location_strategy, name_strategy] if person.location else [name_strategy]
-         for strategy, url in strategies:
-             self.log(f"线程{self.worker_number} 开始{strategy}搜索")
-             search_results = self._collect_search_results(url)
-             if search_results:
-                 strategy_used = strategy
-                 break
-+            if strategy == "姓名+城市州邮编":
+-        strategy_used = ""
+-        for strategy, url in strategies:
+-            self.log(f"线程{self.worker_number} 开始{strategy}搜索")
+-            search_results = self._collect_search_results(url)
+-            if search_results:
+-                strategy_used = strategy
+-                break
++        strategies_used: list[str] = []
++        last_search_url = ""
++        single_result: SearchResult | None = None
++
++        def run_search(label: str, first_name: str, last_name: str, location: str = "") -> list[SearchResult]:
++            nonlocal last_search_url, single_result
++            last_search_url = build_search_url(first_name, last_name, location)
++            self.log(f"线程{self.worker_number} 开始{label}搜索")
++            batch = self._collect_search_results(last_search_url)
++            for item in batch:
++                item.found_by = item.found_by or label
++            merge_search_results(search_results, batch)
++            strategies_used.append(label)
++            if len(batch) == 1:
++                single_result = batch[0]
++                self.log(
++                    f"线程{self.worker_number} {label}搜索结果唯一，按规则直接确定该候选，停止扩展搜索"
++                )
++            return batch
++
++        if person.location:
++            location_results = run_search("姓名+城市州邮编", person.first_name, person.last_name, person.location)
++            if not location_results:
 +                self.log(f"线程{self.worker_number} 姓名+城市州邮编无结果，按规则回退姓名搜索")
-+        strategy_used = strategy_used or ("姓名+城市州邮编→姓名" if person.location else "姓名")
++                run_search("姓名", person.first_name, person.last_name)
++            elif single_result is None and person.age and not has_exact_age(location_results, person.age):
++                self.log(
++                    f"线程{self.worker_number} 地点结果有 {len(location_results)} 人但没有年龄 {person.age}，"
++                    "继续姓名搜索并合并候选"
++                )
++                run_search("姓名", person.first_name, person.last_name)
++        else:
++            run_search("姓名", person.first_name, person.last_name)
++
++        if single_result is None and person.age and not has_exact_age(search_results, person.age):
++            for old_location in past_locations(person):
++                run_search("姓名+曾用城市州邮编", person.first_name, person.last_name, old_location)
++                if single_result is not None or has_exact_age(search_results, person.age):
++                    break
++
++        if single_result is None and (not search_results or (person.age and not has_exact_age(search_results, person.age))):
++            for alias_first, alias_last in former_name_pairs(person):
++                alias_label = f"曾用名({alias_first} {alias_last})+城市州邮编" if person.location else f"曾用名({alias_first} {alias_last})"
++                alias_results = run_search(alias_label, alias_first, alias_last, person.location)
++                if single_result is None and person.location and (not alias_results or (person.age and not has_exact_age(alias_results, person.age))):
++                    run_search(f"曾用名({alias_first} {alias_last})", alias_first, alias_last)
++                if single_result is not None or (person.age and has_exact_age(search_results, person.age)):
++                    break
++
++        if single_result is not None:
++            search_results = [single_result]
++
++        strategy_used = "→".join(strategies_used) or "未执行搜索"
          if not search_results:
              return [
                  ProfileResult(
-@@ -344,26 +455,24 @@ class BrowserSession:
-                     message="两级搜索均无可采集结果" if person.location else "姓名搜索无可采集结果",
+@@ -339,31 +524,41 @@ class BrowserSession:
+                     profile_url="",
+                     full_name=person.full_name,
+                     location=person.location,
+-                    query_strategy="姓名+城市州邮编→姓名" if person.location else "姓名",
++                    query_strategy=strategy_used,
++                    search_coverage=strategy_used,
+                     status="无结果",
+-                    message="两级搜索均无可采集结果" if person.location else "姓名搜索无可采集结果",
++                    message=f"已执行 {len(strategies_used)} 种搜索，均无可采集结果",
                  )
              ]
 +        self.log(
 +            f"线程{self.worker_number} 开始采集全部候选详情：候选={len(search_results)}，输入年龄={person.age or '空'}"
 +        )
-+        search_list_url = str(self.page.url or strategies[-1][1])
++        search_list_url = str(self.page.url or last_search_url)
          details: list[ProfileResult] = []
          for index, search_result in enumerate(search_results, 1):
              self._check_cancelled()
              try:
 -                details.append(self._collect_profile(search_result, index, strategy_used))
-+                details.append(self._collect_profile(search_result, index, strategy_used, search_list_url))
++                detail = self._collect_profile(
++                    search_result,
++                    index,
++                    search_result.found_by or strategy_used,
++                    search_list_url,
++                )
++                detail.search_coverage = strategy_used
++                details.append(detail)
              except CloudflareFailure:
                  raise
              except Exception as exc:
@@ -362,6 +586,10 @@ index 4a0df04..7dea3e1 100644
 +                self.capture_diagnostic("detail-failure")
 +                raise RuntimeError(f"详情页采集失败 {search_result.profile_url}: {type(exc).__name__}: {exc}") from exc
 +        selected = select_best_birthday(person, details, len(search_results))
++        selected = enrich_demographics(person, selected, details)
++        if len(search_results) == 1:
++            selected.message = f"搜索结果唯一，按规则直接确定；{selected.message}"
++            selected.query_strategy = f"{selected.query_strategy}→唯一结果直接确认"
 +        self.log(
 +            f"线程{self.worker_number} 匹配完成：候选={len(details)}，"
 +            f"选中年龄={selected.age or '空'}，生日={'已提取' if selected.birthday else '未公开'}；"
@@ -369,20 +597,27 @@ index 4a0df04..7dea3e1 100644
 +        )
 +        return [selected]
 diff --git a/controller.py b/controller.py
-index 1b86d2b..b4f7a69 100644
+index 1b86d2b..7317a03 100644
 --- a/controller.py
 +++ b/controller.py
-@@ -16,12 +16,27 @@ from input_loader import load_people
- from models import PersonInput, RunConfig
+@@ -11,17 +11,33 @@ from pathlib import Path
+ from typing import Callable
+ 
+ from browser_worker import BrowserSession, Cancelled, CloudflareFailure
++from cross_row_enricher import enrich_cross_rows
+ from database import DatabaseWriter, JobDatabase
+ from input_loader import load_people
+-from models import PersonInput, RunConfig
++from models import SEARCH_REVISION, PersonInput, RunConfig
  from output_writer import RealtimeCsvWriter
  from proxy_pool import ProxyGeo, ProxyPool, ProxySpec, parse_proxy_line
 +from runtime_monitor import RuntimeHealthMonitor
  from source_rewriter import remove_completed_rows
-
+ 
  LogFn = Callable[[str], None]
  ProgressFn = Callable[[dict[str, int | str]], None]
-
-
+ 
+ 
 +def _is_proxy_network_error(message: str) -> bool:
 +    upper = str(message or "").upper()
 +    return any(
@@ -400,7 +635,7 @@ index 1b86d2b..b4f7a69 100644
  class AppController:
      def __init__(self, config: RunConfig, log: LogFn | None = None, progress: ProgressFn | None = None) -> None:
          self.config = config
-@@ -38,6 +53,10 @@ class AppController:
+@@ -38,6 +54,10 @@ class AppController:
          self._completed = 0
          self._total = 0
          self.output_path: Path | None = None
@@ -408,10 +643,10 @@ index 1b86d2b..b4f7a69 100644
 +        self._finished_clean = False
 +        self.diagnostics_dir = self.runtime_dir / "diagnostics" / self.log_path.stem
 +        self._final_status = "未开始"
-
+ 
      def _log(self, message: str) -> None:
          clean = str(message).replace("\r", " ").strip()
-@@ -58,6 +77,12 @@ class AppController:
+@@ -58,6 +78,13 @@ class AppController:
              "pending": summary.get("pending", 0) + summary.get("retry", 0) + summary.get("running", 0),
              "output": str(self.output_path or ""),
          }
@@ -421,13 +656,14 @@ index 1b86d2b..b4f7a69 100644
 +            payload["birthdays"] = int(csv_audit.get("birthdays", 0))
 +            payload["genders"] = int(csv_audit.get("genders", 0))
 +            payload["zodiacs"] = int(csv_audit.get("zodiacs", 0))
++            payload["remarks"] = int(csv_audit.get("remarks", 0))
          self.progress(payload)
-
+ 
      def start_async(self) -> None:
-@@ -106,6 +131,21 @@ class AppController:
+@@ -106,6 +133,21 @@ class AppController:
                  except OSError:
                      pass
-
+ 
 +    def _write_run_summary(self) -> None:
 +        payload = {
 +            "finished_at": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -446,7 +682,19 @@ index 1b86d2b..b4f7a69 100644
      def _worker(
          self,
          worker_number: int,
-@@ -133,6 +173,7 @@ class AppController:
+@@ -119,9 +161,9 @@ class AppController:
+         try:
+             geo = ProxyGeo()
+             if proxy_spec and proxy_pool:
+-                ready = proxy_pool.ensure_ready(proxy_spec, self.stop_event)
++                ready = proxy_pool.wait_until_ready(proxy_spec, self.stop_event)
+                 if not ready:
+-                    self._log(f"{proxy_spec.label} 启动前检查未通过，本线程不启动浏览器")
++                    self._log(f"{proxy_spec.label} 等待恢复期间收到停止指令，本线程正常结束")
+                     return
+                 geo = ready
+             session = BrowserSession(
+@@ -133,6 +175,7 @@ class AppController:
                  stop_event=self.stop_event,
                  log=self._log,
                  max_search_pages=self.config.max_search_pages,
@@ -454,7 +702,7 @@ index 1b86d2b..b4f7a69 100644
              )
              while not self.stop_event.is_set():
                  try:
-@@ -154,6 +195,8 @@ class AppController:
+@@ -154,6 +197,8 @@ class AppController:
                      writer.put("retry", job_id, "用户停止")
                      break
                  except CloudflareFailure as exc:
@@ -463,7 +711,7 @@ index 1b86d2b..b4f7a69 100644
                      challenge_streak += 1
                      next_attempt = attempts + 1
                      self._log(f"线程{worker_number} Cloudflare 连续失败 {challenge_streak} 次")
-@@ -174,7 +217,26 @@ class AppController:
+@@ -174,7 +219,24 @@ class AppController:
                      next_attempt = attempts + 1
                      message = f"{type(exc).__name__}: {exc}"
                      self._log(f"线程{worker_number} 第 {person.source_row} 行处理错误：{message}")
@@ -477,23 +725,41 @@ index 1b86d2b..b4f7a69 100644
 +                        # 通道故障属于代理资源故障，不消耗人员任务的业务重试次数。
 +                        writer.put("retry_network", job_id, message)
 +                        job_queue.put((job_id, person, attempts))
-+                        self._log(f"线程{worker_number} 检测到代理通道错误，刷新出口后重建浏览器")
-+                        refreshed_geo = proxy_pool.refresh_after_challenge(proxy_spec, self.stop_event)
++                        self._log(
++                            f"线程{worker_number} 检测到代理通道错误，关闭错误页并保持线程等待代理恢复"
++                        )
++                        session.close()
++                        refreshed_geo = proxy_pool.wait_until_ready(proxy_spec, self.stop_event)
 +                        if refreshed_geo and not self.stop_event.is_set():
 +                            session.rebuild(refreshed_geo)
-+                        else:
-+                            self._log(
-+                                f"线程{worker_number} 当前代理通道仍不可用，停用该浏览器线程；"
-+                                "任务已无损回队列，由其他线程继续"
-+                            )
-+                            break
++                            self._log(f"线程{worker_number} 代理恢复，已使用全新 profile 继续领取任务")
 +                    elif next_attempt < self.config.max_job_attempts and not self.stop_event.is_set():
                          writer.put("retry", job_id, message)
                          job_queue.put((job_id, person, next_attempt))
                          if session:
-@@ -201,6 +263,13 @@ class AppController:
+@@ -196,11 +258,32 @@ class AppController:
+             headers, people = load_people(self.config.input_file)
+             self.database.reset_interrupted()
+             inserted = self.database.import_people(people)
++            failed_requeued = self.database.reset_failed_for_new_run(self.config.input_file)
++            requeued = self.database.reset_incomplete_demographics(self.config.input_file, SEARCH_REVISION)
+             jobs = self.database.pending_people(self.config.input_file, self.config.max_job_attempts)
+             self._total = len(people)
              self._log(f"导入识别 {len(people)} 行，新增数据库任务 {inserted} 条，待处理 {len(jobs)} 条")
-             csv_writer = RealtimeCsvWriter(self.config.output_dir, self.config.input_file, headers)
+-            csv_writer = RealtimeCsvWriter(self.config.output_dir, self.config.input_file, headers)
++            if requeued:
++                self._log(
++                    f"搜索/字段策略升级：重试 {requeued} 条旧版生日、性别或星座不完整结果，"
++                    "并从 SQLite 重建实时 CSV"
++                )
++            if failed_requeued:
++                self._log(f"新一轮启动：重新排队 {failed_requeued} 条上一轮技术失败行")
++            csv_writer = RealtimeCsvWriter(
++                self.config.output_dir,
++                self.config.input_file,
++                headers,
++                rebuild=bool(requeued),
++            )
              self.output_path = csv_writer.path
 +            restored = sum(
 +                1
@@ -505,7 +771,7 @@ index 1b86d2b..b4f7a69 100644
              writer = DatabaseWriter(self.database, csv_writer, self._log)
              writer.start()
              job_queue: queue.Queue[tuple[int, PersonInput, int]] = queue.Queue()
-@@ -218,31 +287,63 @@ class AppController:
+@@ -218,31 +301,79 @@ class AppController:
                  )
                  self.worker_threads.append(thread)
                  thread.start()
@@ -523,6 +789,22 @@ index 1b86d2b..b4f7a69 100644
 +            if self.monitor:
 +                self.monitor.stop()
              writer.flush()
++            writer.close()
++            writer = None
++            records = self.database.result_records(self.config.input_file)
++            cross_row_updates = enrich_cross_rows(records)
++            if cross_row_updates:
++                updated = self.database.update_result_records(cross_row_updates)
++                rebuilt_writer = RealtimeCsvWriter(
++                    self.config.output_dir,
++                    self.config.input_file,
++                    headers,
++                    rebuild=True,
++                )
++                for original, result, created_at in self.database.existing_results(self.config.input_file):
++                    rebuilt_writer.append(original, result, created_at)
++                rebuilt_writer.close()
++                self._log(f"跨输入行强身份信号补充 {updated} 条结果，已从 SQLite 重建实时 CSV")
              if self.stop_event.is_set():
                  self._log("任务已停止；未执行输入文件重建，已保留数据库断点")
                  self._emit_progress("已停止")
@@ -573,8 +855,147 @@ index 1b86d2b..b4f7a69 100644
 +            if self._finished_clean:
 +                shutil.rmtree(self.runtime_dir, ignore_errors=True)
              self.worker_threads.clear()
+diff --git a/cross_row_enricher.py b/cross_row_enricher.py
+new file mode 100644
+index 0000000..75d8e08
+--- /dev/null
++++ b/cross_row_enricher.py
+@@ -0,0 +1,133 @@
++from __future__ import annotations
++
++import re
++from collections import defaultdict
++from typing import Any
++
++from demographics_enricher import zodiac_from_birthday
++
++
++PHONE_RE = re.compile(r"(?<!\d)(?:\+?1[\s.()-]*)?(\d{3})[\s.()-]*(\d{3})[\s.-]*(\d{4})(?!\d)")
++EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
++
++
++def _key(value: object) -> str:
++    return re.sub(r"[\s_-]+", "", str(value or "").strip().lower())
++
++
++def _compact(value: object) -> str:
++    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
++
++
++def _value(original: dict[str, Any], keys: set[str]) -> str:
++    for header, value in original.items():
++        if _key(header) in keys and str(value or "").strip():
++            return str(value).strip()
++    return ""
++
++
++def _name(original: dict[str, Any]) -> str:
++    full = _value(original, {"fullname", "name", "姓名", "完整姓名"})
++    if full:
++        return _compact(full)
++    return _compact(
++        " ".join(
++            _value(original, keys)
++            for keys in ({"firstname", "first", "名"}, {"middlename", "middle", "中间名"}, {"lastname", "last", "姓"})
++        )
++    )
++
++
++def _signals(original: dict[str, Any]) -> set[str]:
++    name = _name(original)
++    if not name:
++        return set()
++    signals: set[str] = set()
++    address = _value(original, {"currentaddress", "address", "当前地址", "地址"})
++    if len(_compact(address)) >= 12:
++        signals.add(f"A:{name}:{_compact(address)}")
++    phone_texts = [
++        _value(original, {"phonenumbers", "phones", "phone", "primaryphone", "手机号", "电话"})
++    ]
++    search_type = _value(original, {"searchtype", "搜索类型", "查询类型"}).lower()
++    if any(marker in search_type for marker in ("phone", "mobile", "电话", "手机")):
++        phone_texts.append(_value(original, {"query", "查询", "搜索值"}))
++    for text in phone_texts:
++        for match in PHONE_RE.finditer(text):
++            signals.add(f"P:{name}:{''.join(match.groups())}")
++    email_text = _value(original, {"emailaddresses", "emails", "email", "邮箱"})
++    for match in EMAIL_RE.finditer(email_text):
++        signals.add(f"E:{name}:{match.group(0).lower()}")
++    return signals
++
++
++def enrich_cross_rows(
++    records: list[tuple[int, dict[str, Any], dict[str, Any], str]],
++) -> dict[int, dict[str, Any]]:
++    """按姓名+完整电话/邮箱/当前地址聚类，只用无冲突字段补同一人的其他输入行。"""
++
++    parent = list(range(len(records)))
++
++    def find(index: int) -> int:
++        while parent[index] != index:
++            parent[index] = parent[parent[index]]
++            index = parent[index]
++        return index
++
++    def union(left: int, right: int) -> None:
++        a, b = find(left), find(right)
++        if a != b:
++            parent[b] = a
++
++    owners: dict[str, int] = {}
++    for index, (_, original, _, _) in enumerate(records):
++        for signal in _signals(original):
++            if signal in owners:
++                union(index, owners[signal])
++            else:
++                owners[signal] = index
++
++    groups: dict[int, list[int]] = defaultdict(list)
++    for index in range(len(records)):
++        groups[find(index)].append(index)
++
++    updates: dict[int, dict[str, Any]] = {}
++    for indexes in groups.values():
++        if len(indexes) < 2:
++            continue
++        unique: dict[str, set[str]] = {
++            field: {
++                str(records[index][2].get(field) or "").strip()
++                for index in indexes
++                if str(records[index][2].get(field) or "").strip()
++            }
++            for field in ("birthday", "gender", "zodiac")
++        }
++        canonical = {field: next(iter(values)) for field, values in unique.items() if len(values) == 1}
++        if canonical.get("birthday") and not canonical.get("zodiac"):
++            zodiac = zodiac_from_birthday(canonical["birthday"])
++            if zodiac:
++                canonical["zodiac"] = zodiac
++        for index in indexes:
++            result_id, _, original_result, _ = records[index]
++            result = dict(original_result)
++            filled: list[str] = []
++            for field, label in (("birthday", "生日"), ("gender", "性别"), ("zodiac", "星座")):
++                if not str(result.get(field) or "").strip() and canonical.get(field):
++                    result[field] = canonical[field]
++                    filled.append(label)
++            if not filled:
++                continue
++            note = str(result.get("demographics_note") or "").strip()
++            extra = f"{'/'.join(filled)}=跨输入行强信号一致补充"
++            result["demographics_note"] = "；".join(x for x in (note, extra) if x)
++            if "生日" in filled:
++                status = str(result.get("status") or "")
++                if "生日未公开" in status:
++                    result["status"] = status.replace("身份但生日未公开", "生日")
++                elif status in {"无结果", "输入无效"}:
++                    result["status"] = "已通过跨输入行强信号匹配生日（高置信度）"
++                message = str(result.get("message") or "").strip()
++                result["message"] = "；".join(x for x in (message, "同姓名且完整电话/邮箱/当前地址一致") if x)
++            updates[result_id] = result
++    return updates
 diff --git a/database.py b/database.py
-index be93fbc..0b5eb71 100644
+index be93fbc..f3619c4 100644
 --- a/database.py
 +++ b/database.py
 @@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS jobs (
@@ -592,7 +1013,7 @@ index be93fbc..0b5eb71 100644
 +            columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(jobs)")}
 +            if "age" not in columns:
 +                connection.execute("ALTER TABLE jobs ADD COLUMN age TEXT")
-
+ 
      def connect(self) -> sqlite3.Connection:
          connection = sqlite3.connect(self.path, timeout=30)
 @@ -79,9 +83,9 @@ class JobDatabase:
@@ -615,7 +1036,63 @@ index be93fbc..0b5eb71 100644
                          person.validation_error, now, now,
                      ),
                  )
-@@ -127,6 +132,7 @@ class JobDatabase:
+@@ -104,6 +109,55 @@ class JobDatabase:
+             )
+             connection.commit()
+ 
++    def reset_failed_for_new_run(self, source_path: Path) -> int:
++        """新一轮启动时释放上一轮达到上限的技术失败行。"""
++
++        with closing(self.connect()) as connection, connection:
++            cursor = connection.execute(
++                "UPDATE jobs SET status='pending', attempts=0, message='', updated_at=? "
++                "WHERE source_path=? AND status='failed'",
++                (utc_now(), str(source_path.resolve())),
++            )
++            connection.commit()
++            return int(cursor.rowcount)
++
++    def reset_incomplete_demographics(self, source_path: Path, search_revision: int) -> int:
++        """策略升级后重跑旧版生日/性别/星座不完整结果；同一版本不重复。"""
++
++        with closing(self.connect()) as connection, connection:
++            rows = connection.execute(
++                """
++                SELECT DISTINCT j.id
++                FROM jobs AS j
++                JOIN results AS r ON r.job_id=j.id
++                WHERE j.source_path=?
++                  AND (
++                    COALESCE(json_extract(r.result_json, '$.birthday'), '')=''
++                    OR COALESCE(json_extract(r.result_json, '$.gender'), '')=''
++                    OR COALESCE(json_extract(r.result_json, '$.zodiac'), '')=''
++                  )
++                  AND COALESCE(json_extract(r.result_json, '$.search_revision'), 0) < ?
++                """,
++                (str(source_path.resolve()), search_revision),
++            ).fetchall()
++            job_ids = [int(row[0]) for row in rows]
++            if not job_ids:
++                return 0
++            placeholders = ",".join("?" for _ in job_ids)
++            connection.execute(f"DELETE FROM results WHERE job_id IN ({placeholders})", job_ids)
++            connection.execute(
++                f"UPDATE jobs SET status='pending', attempts=0, message='', updated_at=? "
++                f"WHERE id IN ({placeholders})",
++                (utc_now(), *job_ids),
++            )
++            connection.commit()
++            return len(job_ids)
++
++    def reset_incomplete_birthdays(self, source_path: Path, search_revision: int) -> int:
++        """兼容旧调用名。"""
++
++        return self.reset_incomplete_demographics(source_path, search_revision)
++
+     def pending_people(self, source_path: Path, max_attempts: int) -> list[tuple[int, PersonInput, int]]:
+         with closing(self.connect()) as connection, connection:
+             rows = connection.execute(
+@@ -127,6 +181,7 @@ class JobDatabase:
                          city=row["city"] or "",
                          state=row["state"] or "",
                          zip_code=row["zip_code"] or "",
@@ -623,10 +1100,10 @@ index be93fbc..0b5eb71 100644
                          validation_error=row["validation_error"] or "",
                      ),
                      int(row["attempts"]),
-@@ -142,6 +148,40 @@ class JobDatabase:
+@@ -142,6 +197,69 @@ class JobDatabase:
              ).fetchall()
          return {str(row["status"]): int(row["count"]) for row in rows}
-
+ 
 +    def existing_results(self, source_path: Path) -> list[tuple[dict[str, str], dict[str, Any], str]]:
 +        with closing(self.connect()) as connection, connection:
 +            rows = connection.execute(
@@ -643,6 +1120,35 @@ index be93fbc..0b5eb71 100644
 +            (json.loads(row["original_json"]), json.loads(row["result_json"]), str(row["created_at"]))
 +            for row in rows
 +        ]
++
++    def result_records(self, source_path: Path) -> list[tuple[int, dict[str, Any], dict[str, Any], str]]:
++        with closing(self.connect()) as connection, connection:
++            rows = connection.execute(
++                """
++                SELECT r.id, j.original_json, r.result_json, r.created_at
++                FROM results AS r
++                JOIN jobs AS j ON j.id=r.job_id
++                WHERE j.source_path=?
++                ORDER BY j.source_row, r.result_index, r.id
++                """,
++                (str(source_path.resolve()),),
++            ).fetchall()
++        return [
++            (int(row["id"]), json.loads(row["original_json"]), json.loads(row["result_json"]), str(row["created_at"]))
++            for row in rows
++        ]
++
++    def update_result_records(self, updates: dict[int, dict[str, Any]]) -> int:
++        if not updates:
++            return 0
++        with closing(self.connect()) as connection, connection:
++            for result_id, result in updates.items():
++                connection.execute(
++                    "UPDATE results SET result_json=? WHERE id=?",
++                    (json.dumps(result, ensure_ascii=False), result_id),
++                )
++            connection.commit()
++        return len(updates)
 +
 +    def done_source_rows(self, source_path: Path) -> set[int]:
 +        with closing(self.connect()) as connection, connection:
@@ -661,10 +1167,10 @@ index be93fbc..0b5eb71 100644
 +            connection.commit()
 +        return int(cursor.rowcount)
 +
-
+ 
  class DatabaseWriter(threading.Thread):
      def __init__(self, database: JobDatabase, csv_writer: RealtimeCsvWriter, log: Callable[[str], None]) -> None:
-@@ -201,6 +241,16 @@ class DatabaseWriter(threading.Thread):
+@@ -201,6 +319,16 @@ class DatabaseWriter(threading.Thread):
                  "UPDATE jobs SET status='retry', message=?, updated_at=? WHERE id=?",
                  (str(message), now, int(job_id)),
              )
@@ -681,25 +1187,149 @@ index be93fbc..0b5eb71 100644
          elif event == "failed":
              job_id, message = payload
              connection.execute(
+diff --git a/demographics_enricher.py b/demographics_enricher.py
+new file mode 100644
+index 0000000..226edf1
+--- /dev/null
++++ b/demographics_enricher.py
+@@ -0,0 +1,117 @@
++from __future__ import annotations
++
++import re
++from datetime import datetime
++
++from models import PersonInput, ProfileResult
++
++
++ZODIAC_RANGES = (
++    ((1, 20), "Aquarius", "January 20 - February 18"),
++    ((2, 19), "Pisces", "February 19 - March 20"),
++    ((3, 21), "Aries", "March 21 - April 19"),
++    ((4, 20), "Taurus", "April 20 - May 20"),
++    ((5, 21), "Gemini", "May 21 - June 20"),
++    ((6, 21), "Cancer", "June 21 - July 22"),
++    ((7, 23), "Leo", "July 23 - August 22"),
++    ((8, 23), "Virgo", "August 23 - September 22"),
++    ((9, 23), "Libra", "September 23 - October 22"),
++    ((10, 23), "Scorpio", "October 23 - November 21"),
++    ((11, 22), "Sagittarius", "November 22 - December 21"),
++    ((12, 22), "Capricorn", "December 22 - January 19"),
++)
++PHONE_RE = re.compile(r"(?<!\d)(?:\+?1[\s.()-]*)?(\d{3})[\s.()-]*(\d{3})[\s.-]*(\d{4})(?!\d)")
++EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
++STREET_RE = re.compile(
++    r"\b(\d{1,6})\s+([A-Za-z0-9.'-]+(?:\s+[A-Za-z0-9.'-]+){0,5}?)\s+"
++    r"(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd|Court|Ct|"
++    r"Circle|Cir|Way|Parkway|Pkwy|Place|Pl|Terrace|Ter|Trail|Trl)\b",
++    re.I,
++)
++
++
++def _birthday_date(value: str) -> datetime | None:
++    raw = re.sub(r"\s+", " ", str(value or "")).strip()
++    for fmt in ("%m/%d/%Y", "%m-%d-%Y", "%Y-%m-%d", "%B %d, %Y", "%b %d, %Y"):
++        try:
++            return datetime.strptime(raw, fmt)
++        except ValueError:
++            continue
++    return None
++
++
++def zodiac_from_birthday(value: str) -> str:
++    born = _birthday_date(value)
++    if not born:
++        return ""
++    month_day = (born.month, born.day)
++    if month_day >= (12, 22) or month_day <= (1, 19):
++        return "Capricorn (December 22 - January 19)"
++    for start, sign, date_range in ZODIAC_RANGES[:-1]:
++        index = ZODIAC_RANGES.index((start, sign, date_range))
++        next_start = ZODIAC_RANGES[index + 1][0]
++        if start <= month_day < next_start:
++            return f"{sign} ({date_range})"
++    return ""
++
++
++def _compact_name(value: str) -> tuple[str, str]:
++    words = re.findall(r"[a-z]+", str(value or "").lower())
++    return (words[0], words[-1]) if len(words) >= 2 else ("", "")
++
++
++def _profile_text(detail: ProfileResult) -> str:
++    return " | ".join((detail.location, detail.result_summary, detail.profile_summary, detail.former_names))
++
++
++def _unique_signals(text: str) -> tuple[set[str], set[str], set[str]]:
++    phones = {"".join(match.groups()) for match in PHONE_RE.finditer(text)}
++    emails = {match.group(0).lower() for match in EMAIL_RE.finditer(text)}
++    streets = {
++        re.sub(r"[^a-z0-9]", "", match.group(0).lower())
++        for match in STREET_RE.finditer(text)
++    }
++    return phones, emails, streets
++
++
++def _same_identity_duplicate(selected: ProfileResult, donor: ProfileResult) -> bool:
++    if _compact_name(selected.full_name) != _compact_name(donor.full_name):
++        return False
++    selected_age = int(selected.age) if str(selected.age).isdigit() else None
++    donor_age = int(donor.age) if str(donor.age).isdigit() else None
++    if selected_age is not None and donor_age is not None and abs(selected_age - donor_age) > 1:
++        return False
++    left = _unique_signals(_profile_text(selected))
++    right = _unique_signals(_profile_text(donor))
++    return any(a & b for a, b in zip(left, right))
++
++
++def enrich_demographics(
++    person: PersonInput,
++    selected: ProfileResult,
++    details: list[ProfileResult],
++) -> ProfileResult:
++    """只从严格同身份重复档案补字段；星座可由完整生日确定性计算。"""
++
++    del person  # 预留给后续来源一致性规则；当前不根据姓名猜性别或生日。
++    filled: list[str] = []
++    for donor in details:
++        if donor is selected or not _same_identity_duplicate(selected, donor):
++            continue
++        if not selected.birthday and donor.birthday:
++            selected.birthday = donor.birthday
++            filled.append("生日(同身份重复档案)")
++        if not selected.gender and donor.gender:
++            selected.gender = donor.gender
++            filled.append("性别(同身份重复档案)")
++        if not selected.zodiac and donor.zodiac:
++            selected.zodiac = donor.zodiac
++            filled.append("星座(同身份重复档案)")
++    if selected.birthday and not selected.zodiac:
++        selected.zodiac = zodiac_from_birthday(selected.birthday)
++        if selected.zodiac:
++            filled.append("星座(由完整生日确定)")
++    if filled:
++        extra = "、".join(dict.fromkeys(filled))
++        selected.demographics_note = "；".join(x for x in (selected.demographics_note, extra) if x)
++    return selected
 diff --git a/gui.py b/gui.py
-index 0f625df..b2880f2 100644
+index 0f625df..86cc6da 100644
 --- a/gui.py
 +++ b/gui.py
-@@ -195,7 +195,9 @@ class MainWindow:
+@@ -195,7 +195,10 @@ class MainWindow:
              self.status_var.set(status)
              self.count_var.set(
                  f"总数 {state.get('total', 0)}｜完成 {state.get('completed', 0)}｜"
 -                f"待处理 {state.get('pending', 0)}｜失败 {state.get('failed', 0)}"
 +                f"待处理 {state.get('pending', 0)}｜失败 {state.get('failed', 0)}｜"
 +                f"CSV {state.get('output_rows', 0)}｜生日 {state.get('birthdays', 0)}｜"
-+                f"性别 {state.get('genders', 0)}｜星座 {state.get('zodiacs', 0)}"
++                f"性别 {state.get('genders', 0)}｜星座 {state.get('zodiacs', 0)}｜"
++                f"备注 {state.get('remarks', 0)}"
              )
              output = str(state.get("output", ""))
              self.output_status_var.set(f"实时 CSV：{output}" if output else "")
-@@ -239,7 +241,9 @@ class MainWindow:
+@@ -239,7 +242,9 @@ class MainWindow:
              self.root.destroy()
-
-
+ 
+ 
 -def run_gui() -> None:
 +def run_gui(auto_start: bool = False) -> None:
      root = tk.Tk()
@@ -710,13 +1340,14 @@ index 0f625df..b2880f2 100644
      root.mainloop()
 diff --git a/identity_matcher.py b/identity_matcher.py
 new file mode 100644
-index 0000000..fe1289c
+index 0000000..1ac835f
 --- /dev/null
 +++ b/identity_matcher.py
-@@ -0,0 +1,429 @@
+@@ -0,0 +1,477 @@
 +from __future__ import annotations
 +
 +import re
++import json
 +from dataclasses import dataclass
 +from datetime import date, datetime
 +from difflib import SequenceMatcher
@@ -746,6 +1377,7 @@ index 0000000..fe1289c
 +    "当前地址",
 +    "现地址",
 +}
++CURRENT_ADDRESS_PROPERTY_KEYS = {"currentaddresspropertyinfo", "当前地址房产信息"}
 +PAST_ADDRESS_KEYS = {
 +    "pastaddress",
 +    "pastaddresses",
@@ -767,6 +1399,8 @@ index 0000000..fe1289c
 +}
 +RELATIVE_KEYS = {"possiblerelative", "possiblerelatives", "relatives", "亲属", "可能亲属"}
 +ASSOCIATE_KEYS = {"possibleassociate", "possibleassociates", "associates", "关联人", "可能关联人"}
++QUERY_KEYS = {"query", "查询", "搜索值", "检索值"}
++SEARCH_TYPE_KEYS = {"searchtype", "搜索类型", "查询类型"}
 +
 +PHONE_RE = re.compile(r"(?<!\d)(?:\+?1[\s.()-]*)?(\d{3})[\s.()-]*(\d{3})[\s.-]*(\d{4})(?!\d)")
 +EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
@@ -785,6 +1419,7 @@ index 0000000..fe1289c
 +    score: int
 +    strong_categories: int
 +    exact_age: bool
++    age_difference: int | None
 +    evidence: list[str]
 +    conflicts: list[str]
 +
@@ -819,6 +1454,43 @@ index 0000000..fe1289c
 +    for value in values:
 +        result.extend(part.strip() for part in re.split(r"[|\r\n;]+", value) if part.strip())
 +    return result
++
++
++def _query_values(person: PersonInput, kind: str) -> list[str]:
++    search_types = " ".join(_values(person, SEARCH_TYPE_KEYS)).lower()
++    queries = _values(person, QUERY_KEYS)
++    if kind == "phone" and any(marker in search_types for marker in ("phone", "mobile", "电话", "手机")):
++        return queries
++    if kind == "email" and any(marker in search_types for marker in ("email", "邮箱")):
++        return queries
++    return []
++
++
++def _property_addresses(person: PersonInput) -> list[str]:
++    found: list[str] = []
++    for raw in _values(person, CURRENT_ADDRESS_PROPERTY_KEYS):
++        try:
++            data = json.loads(raw)
++        except (TypeError, ValueError):
++            continue
++        if isinstance(data, dict):
++            address = _clean(data.get("Address") or data.get("address"))
++            if address:
++                found.append(address)
++    return found
++
++
++def _contact_names(values: list[str]) -> dict[str, int | None]:
++    contacts: dict[str, int | None] = {}
++    for part in _split_values(values):
++        age_match = re.search(r"(?:\bAge\s*|,\s*)(\d{1,3})\b", part, re.I)
++        age = int(age_match.group(1)) if age_match and 0 < int(age_match.group(1)) < 125 else None
++        name = re.sub(r"\s*\(?\bAge\s*\d{1,3}\)?\s*$", "", part, flags=re.I)
++        name = re.sub(r",\s*\d{1,3}\s*$", "", name).strip()
++        normalized = _compact(name)
++        if len(normalized) >= 6:
++            contacts[normalized] = age
++    return contacts
 +
 +
 +def _phones(texts: list[str]) -> set[str]:
@@ -917,7 +1589,7 @@ index 0000000..fe1289c
 +    candidate_text = _location_text(detail)
 +    candidate_compact = _compact(candidate_text)
 +
-+    input_phones = _phones(_values(person, PHONE_KEYS))
++    input_phones = _phones([*_values(person, PHONE_KEYS), *_query_values(person, "phone")])
 +    candidate_phones = _phones([candidate_text])
 +    exact_phones = input_phones & candidate_phones
 +    last7 = {phone[-7:] for phone in input_phones} & {phone[-7:] for phone in candidate_phones}
@@ -937,7 +1609,7 @@ index 0000000..fe1289c
 +        score -= 8
 +        conflicts.append("公开手机号不一致")
 +
-+    input_emails = _emails(_values(person, EMAIL_KEYS))
++    input_emails = _emails([*_values(person, EMAIL_KEYS), *_query_values(person, "email")])
 +    candidate_emails = _emails([candidate_text])
 +    if input_emails & candidate_emails:
 +        score += 50
@@ -947,7 +1619,7 @@ index 0000000..fe1289c
 +        score -= 6
 +        conflicts.append("公开邮箱不一致")
 +
-+    current_addresses = _split_values(_values(person, CURRENT_ADDRESS_KEYS))
++    current_addresses = _split_values([*_values(person, CURRENT_ADDRESS_KEYS), *_property_addresses(person)])
 +    past_addresses = _split_values(_values(person, PAST_ADDRESS_KEYS))
 +    exact_current = [
 +        address
@@ -1028,11 +1700,7 @@ index 0000000..fe1289c
 +        score += 3
 +        evidence.append("州一致（弱证据）")
 +
-+    relative_names = {
-+        _compact(name)
-+        for name in _split_values(_values(person, RELATIVE_KEYS))
-+        if len(_compact(name)) >= 6
-+    }
++    relative_names = _contact_names(_values(person, RELATIVE_KEYS))
 +    relative_hits = sum(1 for name in relative_names if name in candidate_compact)
 +    if relative_hits:
 +        score += min(16, relative_hits * 8)
@@ -1040,11 +1708,7 @@ index 0000000..fe1289c
 +        if relative_hits >= 2:
 +            strong.add("relatives")
 +
-+    associate_names = {
-+        _compact(name)
-+        for name in _split_values(_values(person, ASSOCIATE_KEYS))
-+        if len(_compact(name)) >= 6
-+    }
++    associate_names = _contact_names(_values(person, ASSOCIATE_KEYS))
 +    associate_hits = sum(1 for name in associate_names if name in candidate_compact)
 +    if associate_hits:
 +        score += min(6, associate_hits * 3)
@@ -1052,7 +1716,12 @@ index 0000000..fe1289c
 +
 +    input_age = _age(person.age)
 +    candidate_age = _age(detail.age)
-+    exact_age = bool(input_age is not None and candidate_age == input_age)
++    birthday_age = _birthday_age(detail.birthday)
++    exact_age = bool(
++        input_age is not None
++        and (candidate_age == input_age or (candidate_age is None and birthday_age == input_age))
++    )
++    age_difference = abs(input_age - candidate_age) if input_age is not None and candidate_age is not None else None
 +    if exact_age:
 +        score += 30
 +        evidence.append("年龄完全一致")
@@ -1069,7 +1738,6 @@ index 0000000..fe1289c
 +            score -= 8
 +            conflicts.append("年龄不一致")
 +
-+    birthday_age = _birthday_age(detail.birthday)
 +    if candidate_age is not None and birthday_age is not None:
 +        if abs(candidate_age - birthday_age) <= 1:
 +            score += 3
@@ -1083,6 +1751,7 @@ index 0000000..fe1289c
 +        score=score,
 +        strong_categories=len(strong),
 +        exact_age=exact_age,
++        age_difference=age_difference,
 +        evidence=evidence,
 +        conflicts=conflicts,
 +    )
@@ -1118,7 +1787,12 @@ index 0000000..fe1289c
 +
 +    scored = [score_candidate(person, detail) for detail in details]
 +    exact_age = [item for item in scored if item.exact_age]
-+    pool = exact_age or scored
++    near_age = [
++        item
++        for item in scored
++        if item.age_difference == 1 and item.strong_categories >= 1 and item.score >= 20
++    ]
++    pool = exact_age or near_age or scored
 +    ranked = sorted(
 +        pool,
 +        key=lambda item: (item.score, item.strong_categories, bool(item.detail.birthday), -item.detail.result_index),
@@ -1132,7 +1806,11 @@ index 0000000..fe1289c
 +    age_reason = (
 +        f"先限定 {len(exact_age)} 个同龄候选"
 +        if exact_age
-+        else (f"没有年龄 {person.age} 的候选" if person.age else "输入未提供年龄")
++        else (
++            f"没有完全同龄候选，先限定 {len(near_age)} 个年龄相差1岁候选"
++            if near_age
++            else (f"没有年龄 {person.age} 或相差1岁的候选" if person.age else "输入未提供年龄")
++        )
 +    )
 +    evidence_text = "、".join(best.evidence[:8]) or "仅有弱匹配证据"
 +    conflict_text = f"；冲突={'、'.join(best.conflicts[:4])}" if best.conflicts else ""
@@ -1156,11 +1834,11 @@ index f21780f..3a1862d 100644
 +    "current_address": ("currentaddress", "current_address", "current address", "当前地址", "现地址"),
      "query": ("query", "search", "keyword", "关键词", "查询", "搜索资料"),
  }
-
+ 
 @@ -142,6 +144,14 @@ def _looks_unsupported_query(value: str) -> bool:
      return "@" in value or (compact.isdigit() and len(compact) >= 7)
-
-
+ 
+ 
 +def _normalize_age(value: str) -> str:
 +    match = re.fullmatch(r"\s*(\d{1,3})(?:\.0+)?\s*", value or "")
 +    if not match:
@@ -1212,29 +1890,47 @@ index 359684a..e4cd282 100644
 +    parser.add_argument("--auto-start", action="store_true", help="载入上次 GUI 配置后自动开始")
      args = parser.parse_args()
      from bootstrap import ensure_dependencies
-
+ 
 @@ -24,7 +25,7 @@ def main() -> int:
          return 0
      from gui import run_gui
-
+ 
 -    run_gui()
 +    run_gui(auto_start=args.auto_start)
      return 0
-
-
+ 
+ 
 diff --git a/models.py b/models.py
-index bd779ff..19393a7 100644
+index bd779ff..1c32f24 100644
 --- a/models.py
 +++ b/models.py
-@@ -18,6 +18,7 @@ class PersonInput:
+@@ -5,6 +5,9 @@ from pathlib import Path
+ from typing import Any
+ 
+ 
++SEARCH_REVISION = 4
++
++
+ @dataclass(slots=True)
+ class PersonInput:
+     source_path: Path
+@@ -18,6 +21,7 @@ class PersonInput:
      city: str = ""
      state: str = ""
      zip_code: str = ""
 +    age: str = ""
      validation_error: str = ""
-
+ 
      @property
-@@ -47,6 +48,8 @@ class ProfileResult:
+@@ -38,6 +42,7 @@ class SearchResult:
+     location: str = ""
+     former_names: str = ""
+     result_summary: str = ""
++    found_by: str = ""
+ 
+ 
+ @dataclass(slots=True)
+@@ -47,13 +52,18 @@ class ProfileResult:
      full_name: str = ""
      age: str = ""
      birthday: str = ""
@@ -1243,7 +1939,17 @@ index bd779ff..19393a7 100644
      location: str = ""
      former_names: str = ""
      result_summary: str = ""
-@@ -61,6 +64,8 @@ class ProfileResult:
+     profile_summary: str = ""
+     query_strategy: str = ""
++    search_coverage: str = ""
++    demographics_note: str = ""
+     status: str = "已提取详情"
+     message: str = ""
++    search_revision: int = SEARCH_REVISION
+ 
+     def as_dict(self) -> dict[str, Any]:
+         return {
+@@ -61,14 +71,19 @@ class ProfileResult:
              "full_name": self.full_name,
              "age": self.age,
              "birthday": self.birthday,
@@ -1252,30 +1958,53 @@ index bd779ff..19393a7 100644
              "location": self.location,
              "former_names": self.former_names,
              "profile_url": self.profile_url,
+             "result_summary": self.result_summary,
+             "profile_summary": self.profile_summary,
+             "query_strategy": self.query_strategy,
++            "search_coverage": self.search_coverage,
++            "demographics_note": self.demographics_note,
+             "status": self.status,
+             "message": self.message,
++            "search_revision": self.search_revision,
+         }
+ 
+ 
 diff --git a/mylife_parser.py b/mylife_parser.py
-index 9715e21..f718b26 100644
+index 9715e21..9cf1965 100644
 --- a/mylife_parser.py
 +++ b/mylife_parser.py
-@@ -13,6 +13,7 @@ from models import ProfileResult, SearchResult
+@@ -7,15 +7,17 @@ from urllib.parse import quote_plus, urljoin, urlsplit, urlunsplit
+ 
+ from bs4 import BeautifulSoup, Tag
+ 
++from demographics_enricher import zodiac_from_birthday
+ from models import ProfileResult, SearchResult
+ 
+ 
  PROFILE_PATH_RE = re.compile(r"^/[a-z0-9_-]+/[ce]\d+/?$", re.I)
  AGE_RE = re.compile(r"\b(?:Age\s*)?(\d{1,3})\s*(?:years?\s*old|yrs?\.?\s*old)?\b", re.I)
  MONTH = r"(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)"
 +ZODIAC = r"(?:Aries|Taurus|Gemini|Cancer|Leo|Virgo|Libra|Scorpio|Sagittarius|Capricorn|Aquarius|Pisces)"
  BIRTHDAY_PATTERNS = (
-     re.compile(rf"\b(?:Birthday|Date\s+of\s+Birth|Born(?:\s+on)?)\s*[:\-]?\s*({MONTH}\s+\d{{1,2}}(?:,\s*\d{{4}})?)", re.I),
-     re.compile(r"\b(?:Birthday|Date\s+of\s+Birth|Born(?:\s+on)?)\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)", re.I),
-@@ -61,6 +62,7 @@ def _card_for(anchor: Tag) -> Tag:
-
+-    re.compile(rf"\b(?:Birthday|Date\s+of\s+Birth|Born(?:\s+on)?)\s*[:\-]?\s*({MONTH}\s+\d{{1,2}}(?:,\s*\d{{4}})?)", re.I),
+-    re.compile(r"\b(?:Birthday|Date\s+of\s+Birth|Born(?:\s+on)?)\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?)", re.I),
++    re.compile(rf"\b(?:Birthday|Date\s+of\s+Birth|Born(?:\s+on)?)\s*[:\-]?\s*({MONTH}\s+\d{{1,2}},\s*\d{{4}})", re.I),
++    re.compile(r"\b(?:Birthday|Date\s+of\s+Birth|Born(?:\s+on)?)\s*[:\-]?\s*(\d{1,2}[/-]\d{1,2}[/-]\d{4})", re.I),
+ )
+ 
+ 
+@@ -61,6 +63,7 @@ def _card_for(anchor: Tag) -> Tag:
+ 
  def _name_from(anchor: Tag, card_text: str) -> str:
      text = _clean_text(anchor.get_text(" ", strip=True))
 +    text = re.sub(r",\s*\d{1,3}\b.*$", "", text)
      text = re.sub(r"\s+\d(?:\.\d+)?/5\s*$", "", text)
      text = re.sub(r"\s+View\s+Profile.*$", "", text, flags=re.I)
      if 2 <= len(text.split()) <= 8 and not re.search(r"search|view|report|reputation", text, re.I):
-@@ -69,6 +71,19 @@ def _name_from(anchor: Tag, card_text: str) -> str:
+@@ -69,6 +72,19 @@ def _name_from(anchor: Tag, card_text: str) -> str:
      return match.group(1) if match else ""
-
-
+ 
+ 
 +def extract_age(text: str) -> str:
 +    clean = _clean_text(text)
 +    for pattern in (
@@ -1292,7 +2021,7 @@ index 9715e21..f718b26 100644
  def _field(text: str, labels: str) -> str:
      match = re.search(rf"(?:{labels})\s*[:\-]?\s*(.+?)(?=(?:Age|Lives?|Location|Aliases?|Former|View|$)\s*[:\-]?)", text, re.I)
      return _clean_text(match.group(1)) if match else ""
-@@ -85,12 +100,12 @@ def parse_search_results(html: str, base_url: str) -> tuple[list[SearchResult],
+@@ -85,12 +101,12 @@ def parse_search_results(html: str, base_url: str) -> tuple[list[SearchResult],
          seen.add(profile_url)
          card = _card_for(anchor)
          card_text = _clean_text(card.get_text(" ", strip=True))
@@ -1307,16 +2036,48 @@ index 9715e21..f718b26 100644
                  location=_field(card_text, r"Lives?\s+in|Location|Current\s+City"),
                  former_names=_field(card_text, r"Aliases?|Former\s+Names?|Also\s+Known\s+As"),
                  result_summary=card_text[:1000],
-@@ -118,26 +133,62 @@ def extract_birthday(text: str) -> str:
+@@ -109,35 +125,105 @@ def parse_search_results(html: str, base_url: str) -> tuple[list[SearchResult],
+     return results, next_url, no_results
+ 
+ 
+-def extract_birthday(text: str) -> str:
++def extract_birthday(text: str, html: str = "") -> str:
+     clean = _clean_text(text)
+     for pattern in BIRTHDAY_PATTERNS:
+         match = pattern.search(clean)
+         if match:
+             return _clean_text(match.group(1))
++    raw = unescape(html or "")
++    match = re.search(
++        r'''["'](?:birthDate|dateOfBirth|birthday|dob)["']\s*:\s*["'](\d{4})-(\d{2})-(\d{2})["']''',
++        raw,
++        re.I,
++    )
++    if match:
++        return f"{match.group(2)}/{match.group(3)}/{match.group(1)}"
++    match = re.search(
++        r'''["'](?:birthDate|dateOfBirth|birthday|dob)["']\s*:\s*["'](\d{1,2}[/-]\d{1,2}[/-]\d{4})["']''',
++        raw,
++        re.I,
++    )
++    if match:
++        return match.group(1)
      return ""
-
-
+ 
+ 
 +def extract_gender(html: str, text: str = "") -> str:
 +    soup = BeautifulSoup(html or "", "html.parser")
 +    clean = _clean_text(text or soup.get_text(" ", strip=True))
 +    match = re.search(r"\b(?:Gender|Sex)\s*[:\-]?\s*(Female|Male|Non[- ]?binary)\b", clean, re.I)
 +    if match:
 +        return match.group(1).replace("-", " ").title()
++    raw_match = re.search(
++        r'''["'](?:gender|sex)["']\s*:\s*["'](Female|Male|Non[- ]?binary)["']''',
++        unescape(html or ""),
++        re.I,
++    )
++    if raw_match:
++        return raw_match.group(1).replace("-", " ").title()
 +    for span in soup.find_all("span"):
 +        value = _clean_text(span.get_text(" ", strip=True))
 +        if re.fullmatch(r"Female|Male|Non[- ]?binary", value, re.I):
@@ -1353,9 +2114,21 @@ index 9715e21..f718b26 100644
 +    age = extract_age(heading_text) or extract_age(text) or seed.age
      location = _field(text[:8000], r"Lives?\s+in|Current\s+Address|Location") or seed.location
      former_names = _field(text[:8000], r"Aliases?|Former\s+Names?|Also\s+Known\s+As") or seed.former_names
-     birthday = extract_birthday(text)
+-    birthday = extract_birthday(text)
++    birthday = extract_birthday(text, html)
 +    gender = extract_gender(html, text)
 +    zodiac = extract_zodiac(html, text)
++    sources: list[str] = []
++    if birthday:
++        sources.append("生日=MyLife详情")
++    if gender:
++        sources.append("性别=MyLife详情")
++    if not zodiac and birthday:
++        zodiac = zodiac_from_birthday(birthday)
++        if zodiac:
++            sources.append("星座=完整生日确定")
++    elif zodiac:
++        sources.append("星座=MyLife详情")
      return ProfileResult(
          result_index=result_index,
          profile_url=seed.profile_url,
@@ -1372,21 +2145,23 @@ index 9715e21..f718b26 100644
 +        # 身份匹配模块需要读取页面后段的电话和曾用地址；数据库保留到 20K 字符，CSV 不输出此字段。
 +        profile_summary=text[:20000],
          query_strategy=strategy,
++        demographics_note="、".join(sources),
          message="" if birthday else "详情页未公开生日",
      )
 diff --git a/output_writer.py b/output_writer.py
-index 394dd37..b0a3979 100644
+index 394dd37..d7d502f 100644
 --- a/output_writer.py
 +++ b/output_writer.py
-@@ -4,25 +4,12 @@ import csv
+@@ -4,41 +4,58 @@ import csv
  import hashlib
  import json
  import os
 +from collections import Counter
  from pathlib import Path
  from typing import Any
-
-
+ 
++from remark_builder import build_result_remark
+ 
 -RESULT_FIELDS = [
 -    "mylife_result_index",
 -    "mylife_full_name",
@@ -1402,14 +2177,27 @@ index 394dd37..b0a3979 100644
 -    "mylife_message",
 -    "mylife_created_at",
 -]
-+RESULT_FIELDS = ["生日", "性别", "星座"]
-
-
++RESULT_FIELDS = ["生日", "性别", "星座", "备注原因"]
+ 
+ 
  class RealtimeCsvWriter:
-@@ -33,12 +20,31 @@ class RealtimeCsvWriter:
+-    def __init__(self, output_dir: Path, input_path: Path, input_headers: list[str]) -> None:
++    def __init__(
++        self,
++        output_dir: Path,
++        input_path: Path,
++        input_headers: list[str],
++        *,
++        rebuild: bool = False,
++    ) -> None:
+         self.output_dir = output_dir
+         self.input_path = input_path
+         self.input_headers = input_headers
          self.headers = input_headers + RESULT_FIELDS
          self.output_dir.mkdir(parents=True, exist_ok=True)
          self.path = self._select_path()
++        if rebuild and self.path.exists():
++            self.path.unlink()
 +        self._existing_counts = self._load_signatures()
 +        self._restore_seen: Counter[str] = Counter()
          self.file = self.path.open("a", encoding="utf-8-sig", newline="")
@@ -1417,12 +2205,13 @@ index 394dd37..b0a3979 100644
          if self.path.stat().st_size == 0:
              self.writer.writeheader()
              self._flush()
-
+ 
 +    def _row(self, original: dict[str, str], result: dict[str, Any], created_at: str) -> dict[str, Any]:
 +        row: dict[str, Any] = {header: original.get(header, "") for header in self.input_headers}
 +        row["生日"] = result.get("birthday", "")
 +        row["性别"] = result.get("gender", "")
 +        row["星座"] = result.get("zodiac", "")
++        row["备注原因"] = build_result_remark(result)
 +        return row
 +
 +    def _signature(self, row: dict[str, Any]) -> str:
@@ -1438,10 +2227,10 @@ index 394dd37..b0a3979 100644
      def _select_path(self) -> Path:
          base = self.output_dir / f"{self.input_path.stem}_MyLife结果.csv"
          if not base.exists() or base.stat().st_size == 0:
-@@ -54,26 +60,24 @@ class RealtimeCsvWriter:
+@@ -54,26 +71,24 @@ class RealtimeCsvWriter:
          self.file.flush()
          os.fsync(self.file.fileno())
-
+ 
 -    def append(self, original: dict[str, str], result: dict[str, Any], created_at: str) -> None:
 -        row = {header: original.get(header, "") for header in self.input_headers}
 -        mapping = {
@@ -1478,15 +2267,93 @@ index 394dd37..b0a3979 100644
          self._flush()
 +        self._existing_counts[signature] += 1
 +        return True
-
+ 
      def close(self) -> None:
          if not self.file.closed:
+diff --git a/proxy_pool.py b/proxy_pool.py
+index dfb328e..ccf625d 100644
+--- a/proxy_pool.py
++++ b/proxy_pool.py
+@@ -238,6 +238,32 @@ class ProxyPool:
+                 return geo
+         return None
+ 
++    def wait_until_ready(
++        self,
++        spec: ProxySpec,
++        cancel: threading.Event,
++        check_interval: float = 10.0,
++    ) -> ProxyGeo | None:
++        """保持工作线程存活，循环检测/刷新当前专属代理直到恢复或收到停止指令。"""
++
++        cycle = 0
++        while not cancel.is_set():
++            cycle += 1
++            geo = self.check(spec, timeout=10)
++            if geo:
++                if cycle > 1:
++                    self.log(f"{spec.label} 已恢复，浏览器线程继续工作")
++                return geo
++            refreshed = self.refresh(spec)
++            wait_seconds = 10.0 if refreshed else check_interval
++            self.log(
++                f"{spec.label} 暂不可用，浏览器已关闭但工作线程保持；"
++                f"{wait_seconds:g} 秒后继续检测"
++            )
++            if cancel.wait(wait_seconds):
++                return None
++        return None
++
+ 
+ def cleanup_profile_directory(path: Path) -> None:
+     if path.exists():
+diff --git a/remark_builder.py b/remark_builder.py
+new file mode 100644
+index 0000000..1eb2343
+--- /dev/null
++++ b/remark_builder.py
+@@ -0,0 +1,35 @@
++from __future__ import annotations
++
++from collections.abc import Mapping
++from typing import Any
++
++
++def build_result_remark(result: Mapping[str, Any]) -> str:
++    """把内部匹配过程压缩为适合 CSV 最后一列的可审计原因。"""
++
++    strategy = str(result.get("query_strategy") or "").strip()
++    coverage = str(result.get("search_coverage") or "").strip()
++    status = str(result.get("status") or "").strip()
++    message = str(result.get("message") or "").strip()
++    demographics_note = str(result.get("demographics_note") or "").strip()
++
++    search_method = strategy.split("→年龄分层", 1)[0].strip("→ ")
++    if search_method.startswith("姓名+城市州邮编"):
++        method = "姓名+城市州邮编"
++    elif search_method.startswith("姓名"):
++        method = "姓名"
++    elif search_method:
++        method = search_method
++    else:
++        method = "未执行搜索"
++
++    parts = [f"搜索方式：{method}"]
++    if coverage and (coverage != search_method or "→" in coverage):
++        parts.append(f"搜索范围：{coverage}")
++    if status:
++        parts.append(f"结果：{status}")
++    if message:
++        parts.append(f"原因：{message}")
++    if demographics_note:
++        parts.append(f"字段来源：{demographics_note}")
++    return "；".join(parts)
 diff --git a/runtime_monitor.py b/runtime_monitor.py
 new file mode 100644
-index 0000000..9d0c862
+index 0000000..2705188
 --- /dev/null
 +++ b/runtime_monitor.py
-@@ -0,0 +1,111 @@
+@@ -0,0 +1,117 @@
 +from __future__ import annotations
 +
 +import csv
@@ -1536,22 +2403,28 @@ index 0000000..9d0c862
 +            "blank_birthdays": 0,
 +            "genders": 0,
 +            "zodiacs": 0,
++            "remarks": 0,
 +            "bytes": path.stat().st_size if path.is_file() else 0,
 +        }
 +        if not path.is_file() or path.stat().st_size == 0:
 +            return audit
++        unique_birthdays: set[str] = set()
 +        with path.open("r", encoding="utf-8-sig", newline="") as handle:
 +            for row in csv.DictReader(handle):
 +                audit["rows"] = int(audit["rows"]) + 1
-+                if str(row.get("生日", "")).strip():
++                birthday = str(row.get("生日", "")).strip()
++                if birthday:
 +                    audit["birthdays"] = int(audit["birthdays"]) + 1
-+                    audit["unique_birthdays"] = int(audit["unique_birthdays"]) + 1
++                    unique_birthdays.add(birthday)
 +                else:
 +                    audit["blank_birthdays"] = int(audit["blank_birthdays"]) + 1
 +                if str(row.get("性别", "")).strip():
 +                    audit["genders"] = int(audit["genders"]) + 1
 +                if str(row.get("星座", "")).strip():
 +                    audit["zodiacs"] = int(audit["zodiacs"]) + 1
++                if str(row.get("备注原因", "")).strip():
++                    audit["remarks"] = int(audit["remarks"]) + 1
++        audit["unique_birthdays"] = len(unique_birthdays)
 +        return audit
 +
 +    def snapshot(self) -> dict[str, object]:
@@ -1598,14 +2471,230 @@ index 0000000..9d0c862
 +    def stop(self) -> None:
 +        self.stop_event.set()
 +        self.join(timeout=max(5.0, self.interval + 2.0))
+diff --git a/search_planner.py b/search_planner.py
+new file mode 100644
+index 0000000..6918f2a
+--- /dev/null
++++ b/search_planner.py
+@@ -0,0 +1,122 @@
++from __future__ import annotations
++
++import re
++
++from models import PersonInput, SearchResult
++
++
++FORMER_NAME_KEYS = {
++    "formername",
++    "formernames",
++    "alias",
++    "aliases",
++    "othernames",
++    "曾用名",
++    "别名",
++}
++PAST_ADDRESS_KEYS = {
++    "pastaddress",
++    "pastaddresses",
++    "previousaddress",
++    "previousaddresses",
++    "formeraddress",
++    "曾用地址",
++    "曾经地址",
++    "历史地址",
++}
++NON_NAME_WORDS = {
++    "address",
++    "age",
++    "and",
++    "city",
++    "county",
++    "currently",
++    "former",
++    "formerly",
++    "lived",
++    "lives",
++    "located",
++    "location",
++    "resided",
++    "state",
++}
++
++
++def _key(value: object) -> str:
++    return re.sub(r"[\s_-]+", "", str(value or "").strip().lower())
++
++
++def _age(value: object) -> int | None:
++    match = re.search(r"\b(\d{1,3})\b", str(value or ""))
++    if not match:
++        return None
++    number = int(match.group(1))
++    return number if 0 < number < 125 else None
++
++
++def has_exact_age(results: list[SearchResult], input_age: str) -> bool:
++    expected = _age(input_age)
++    return bool(expected is not None and any(_age(result.age) == expected for result in results))
++
++
++def merge_search_results(target: list[SearchResult], additions: list[SearchResult]) -> int:
++    seen = {item.profile_url for item in target}
++    added = 0
++    for item in additions:
++        if item.profile_url and item.profile_url not in seen:
++            target.append(item)
++            seen.add(item.profile_url)
++            added += 1
++    return added
++
++
++def former_name_pairs(person: PersonInput, limit: int = 3) -> list[tuple[str, str]]:
++    """只保留与主姓名共享名/姓的干净曾用名，过滤地址和解析噪声。"""
++
++    primary_first = person.first_name.strip().lower()
++    primary_last = person.last_name.strip().lower()
++    primary = (primary_first, primary_last)
++    pairs: list[tuple[str, str]] = []
++    seen = {primary}
++    for header, raw in person.original.items():
++        if _key(header) not in FORMER_NAME_KEYS:
++            continue
++        for part in re.split(r"[|;\r\n]+", str(raw or "")):
++            words = re.findall(r"[A-Za-z][A-Za-z'.-]*", part)
++            lowered = [word.lower().strip(".'-") for word in words]
++            if not 2 <= len(words) <= 4 or any(word in NON_NAME_WORDS for word in lowered):
++                continue
++            first, last = words[0], words[-1]
++            pair = (first.lower(), last.lower())
++            if pair in seen or (primary_first not in pair and primary_last not in pair):
++                continue
++            seen.add(pair)
++            pairs.append((first, last))
++            if len(pairs) >= limit:
++                return pairs
++    return pairs
++
++
++def past_locations(person: PersonInput, limit: int = 3) -> list[str]:
++    """从曾用地址提取不同于当前地点的 City, ST ZIP，用于补搜旧居住地索引。"""
++
++    current = re.sub(r"[^a-z0-9]", "", person.location.lower())
++    locations: list[str] = []
++    seen = {current}
++    for header, raw in person.original.items():
++        if _key(header) not in PAST_ADDRESS_KEYS:
++            continue
++        for part in re.split(r"[|;\r\n]+", str(raw or "")):
++            match = re.search(r",\s*([A-Za-z][A-Za-z .'-]{1,60}),\s*([A-Z]{2})\s+(\d{5})(?:-\d{4})?\b", part)
++            if not match:
++                continue
++            city = re.sub(r"\s+", " ", match.group(1)).strip()
++            location = f"{city}, {match.group(2)} {match.group(3)}"
++            normalized = re.sub(r"[^a-z0-9]", "", location.lower())
++            if normalized in seen:
++                continue
++            seen.add(normalized)
++            locations.append(location)
++            if len(locations) >= limit:
++                return locations
++    return locations
+diff --git a/socks_bridge.py b/socks_bridge.py
+index 43bf461..b9890fb 100644
+--- a/socks_bridge.py
++++ b/socks_bridge.py
+@@ -4,6 +4,7 @@ import select
+ import socket
+ import socketserver
+ import threading
++import time
+ from dataclasses import dataclass
+ 
+ 
+@@ -43,35 +44,49 @@ class _BridgeServer(socketserver.ThreadingTCPServer):
+ class _BridgeHandler(socketserver.BaseRequestHandler):
+     server: _BridgeServer
+ 
+-    def _remote_connect(self, request_packet: bytes) -> tuple[socket.socket, bytes]:
++    def _remote_connect_once(self, request_packet: bytes) -> tuple[socket.socket, bytes]:
+         spec = self.server.remote
+         remote = socket.create_connection((spec.host, spec.port), timeout=20)
+-        remote.settimeout(20)
+-        remote.sendall(b"\x05\x02\x00\x02")
+-        version, method = _recv_exact(remote, 2)
+-        if version != 5 or method == 0xFF:
+-            remote.close()
+-            raise ConnectionError("remote SOCKS authentication method rejected")
+-        if method == 2:
+-            username = spec.username.encode("utf-8")
+-            password = spec.password.encode("utf-8")
+-            if len(username) > 255 or len(password) > 255:
+-                remote.close()
+-                raise ValueError("SOCKS username/password exceeds 255 bytes")
+-            remote.sendall(b"\x01" + bytes([len(username)]) + username + bytes([len(password)]) + password)
+-            auth_version, status = _recv_exact(remote, 2)
+-            if auth_version != 1 or status != 0:
+-                remote.close()
+-                raise ConnectionError("remote SOCKS authentication failed")
+-        remote.sendall(request_packet)
+-        header = _recv_exact(remote, 4)
+-        address = _read_address(remote, header[3])
+-        port = _recv_exact(remote, 2)
+-        response = header + address + port
+-        if header[1] != 0:
++        try:
++            remote.settimeout(20)
++            remote.sendall(b"\x05\x02\x00\x02")
++            version, method = _recv_exact(remote, 2)
++            if version != 5 or method == 0xFF:
++                raise ConnectionError("remote SOCKS authentication method rejected")
++            if method == 2:
++                username = spec.username.encode("utf-8")
++                password = spec.password.encode("utf-8")
++                if len(username) > 255 or len(password) > 255:
++                    raise ValueError("SOCKS username/password exceeds 255 bytes")
++                remote.sendall(b"\x01" + bytes([len(username)]) + username + bytes([len(password)]) + password)
++                auth_version, status = _recv_exact(remote, 2)
++                if auth_version != 1 or status != 0:
++                    raise ConnectionError("remote SOCKS authentication failed")
++            remote.sendall(request_packet)
++            header = _recv_exact(remote, 4)
++            address = _read_address(remote, header[3])
++            port = _recv_exact(remote, 2)
++            response = header + address + port
++            if header[1] != 0:
++                raise ConnectionError(f"remote SOCKS connect failed: {header[1]}")
++            return remote, response
++        except BaseException:
+             remote.close()
+-            raise ConnectionError(f"remote SOCKS connect failed: {header[1]}")
+-        return remote, response
++            raise
++
++    def _remote_connect(self, request_packet: bytes) -> tuple[socket.socket, bytes]:
++        """在把失败返回 Chromium 前短暂重试，吸收动态代理的瞬时断连。"""
++
++        last_error: BaseException | None = None
++        for attempt in range(1, 4):
++            try:
++                return self._remote_connect_once(request_packet)
++            except (OSError, ConnectionError) as exc:
++                last_error = exc
++                if attempt < 3:
++                    time.sleep(0.35 * attempt)
++        assert last_error is not None
++        raise last_error
+ 
+     @staticmethod
+     def _relay(client: socket.socket, remote: socket.socket) -> None:
 diff --git a/source_rewriter.py b/source_rewriter.py
 index 4a268e7..353a9ea 100644
 --- a/source_rewriter.py
 +++ b/source_rewriter.py
 @@ -7,7 +7,7 @@ from pathlib import Path
  from input_loader import _encoding
-
-
+ 
+ 
 -def _rewrite_csv(path: Path, completed: set[str]) -> int:
 +def _rewrite_csv(path: Path, completed_rows: set[int]) -> int:
      raw = path.read_bytes()
@@ -1625,8 +2714,8 @@ index 4a268e7..353a9ea 100644
              kept.append(row)
 @@ -36,18 +35,22 @@ def _rewrite_csv(path: Path, completed: set[str]) -> int:
      return removed
-
-
+ 
+ 
 -def _rewrite_txt(path: Path, completed: set[str]) -> int:
 +def _rewrite_txt(path: Path, completed_rows: set[int]) -> int:
      raw = path.read_bytes()
@@ -1651,12 +2740,12 @@ index 4a268e7..353a9ea 100644
          handle.write("\n".join(kept) + ("\n" if kept else ""))
 @@ -57,22 +60,21 @@ def _rewrite_txt(path: Path, completed: set[str]) -> int:
      return removed
-
-
+ 
+ 
 -def _rewrite_xlsx(path: Path, completed: set[str]) -> int:
 +def _rewrite_xlsx(path: Path, completed_rows: set[int]) -> int:
      import openpyxl
-
+ 
      keep_vba = path.suffix.lower() == ".xlsm"
      workbook = openpyxl.load_workbook(path, keep_vba=keep_vba)
      removed = 0
@@ -1683,13 +2772,13 @@ index 4a268e7..353a9ea 100644
      finally:
 @@ -81,18 +83,18 @@ def _rewrite_xlsx(path: Path, completed: set[str]) -> int:
      return removed
-
-
+ 
+ 
 -def remove_completed_rows(path: str | Path, completed_first_values: set[str]) -> int:
 -    """仅在整批处理结束后调用；通过同目录临时文件一次性原子重建输入。"""
 +def remove_completed_rows(path: str | Path, completed_source_rows: set[int]) -> int:
 +    """仅在整批结束后按原始源行号重建，重复首列值不会误删未完成行。"""
-
+ 
      source = Path(path).resolve()
 -    completed = {str(value).strip() for value in completed_first_values if str(value).strip()}
 -    if not completed:
@@ -1709,10 +2798,10 @@ index 4a268e7..353a9ea 100644
      raise ValueError(f"不支持重建的文件类型：{suffix}")
 diff --git a/tests/test_age_matching.py b/tests/test_age_matching.py
 new file mode 100644
-index 0000000..00134be
+index 0000000..d6326da
 --- /dev/null
 +++ b/tests/test_age_matching.py
-@@ -0,0 +1,115 @@
+@@ -0,0 +1,159 @@
 +from __future__ import annotations
 +
 +import unittest
@@ -1825,15 +2914,59 @@ index 0000000..00134be
 +        self.assertIn("共同亲属一致2人", scored.evidence)
 +        self.assertGreaterEqual(scored.strong_categories, 3)
 +
++    def test_birthday_derived_age_is_used_when_page_age_is_blank(self) -> None:
++        details = [
++            ProfileResult(1, "https://www.mylife.com/a/e1", full_name="Jane Doe", age="41", birthday="January 1, 1985", location="Denver, CO 80202"),
++            ProfileResult(2, "https://www.mylife.com/b/e2", full_name="Jane Doe", age="", birthday="January 1, 1984", location="Denver, CO 80202"),
++        ]
++        selected = select_best_birthday(self.person(), details, len(details))
++        self.assertEqual(selected.profile_url, "https://www.mylife.com/b/e2")
++        self.assertIn("1 个同龄候选", selected.message)
++
++    def test_one_year_age_pool_beats_unrelated_exact_name_only_candidate(self) -> None:
++        person = self.person(age="42")
++        person.original = {"current_address": "1450 Pearl St, Denver, CO 80202"}
++        details = [
++            ProfileResult(1, "https://www.mylife.com/a/e1", full_name="Jane Doe", age="60", birthday="January 1, 1966", location="Miami, FL"),
++            ProfileResult(2, "https://www.mylife.com/b/e2", full_name="Jane Doe", age="41", birthday="March 7, 1985", location="1450 Pearl St, Denver, CO 80202"),
++        ]
++        selected = select_best_birthday(person, details, len(details))
++        self.assertEqual(selected.profile_url, "https://www.mylife.com/b/e2")
++        self.assertIn("年龄相差1岁候选", selected.message)
++
++    def test_original_search_phone_is_a_strong_signal(self) -> None:
++        person = self.person(age="")
++        person.original = {"query": "3035551234", "search_type": "手机号"}
++        detail = ProfileResult(
++            1,
++            "https://www.mylife.com/a/e1",
++            full_name="Jane Doe",
++            profile_summary="Phone (303) 555-1234",
++        )
++        scored = score_candidate(person, detail)
++        self.assertIn("完整手机号一致", scored.evidence)
++
++    def test_relative_age_suffix_is_removed_before_name_matching(self) -> None:
++        person = self.person(age="")
++        person.original = {"possible_relatives": "John Doe (Age 47)|Mary Doe (Age 52)"}
++        detail = ProfileResult(
++            1,
++            "https://www.mylife.com/a/e1",
++            full_name="Jane Doe",
++            profile_summary="Possible relatives include John Doe and Mary Doe",
++        )
++        scored = score_candidate(person, detail)
++        self.assertIn("共同亲属一致2人", scored.evidence)
++
 +
 +if __name__ == "__main__":
 +    unittest.main()
 diff --git a/tests/test_browser_strategy.py b/tests/test_browser_strategy.py
 new file mode 100644
-index 0000000..a67da39
+index 0000000..fd879dd
 --- /dev/null
 +++ b/tests/test_browser_strategy.py
-@@ -0,0 +1,69 @@
+@@ -0,0 +1,165 @@
 +from __future__ import annotations
 +
 +import threading
@@ -1895,40 +3028,136 @@ index 0000000..a67da39
 +    def test_location_zero_results_then_runs_name_only_search(self) -> None:
 +        hit = SearchResult("https://www.mylife.com/jane-doe/e1", "Jane Doe", "42", "Denver CO 80202")
 +        session, calls = self.session([[], [hit]])
-+        session.process(self.person())
++        selected = session.process(self.person())[0]
 +        self.assertEqual(len(calls), 2)
 +        self.assertIn("searchLocation=", calls[0])
 +        self.assertIn("search=Jane+Doe", calls[1])
++        self.assertEqual(selected.profile_url, hit.profile_url)
++        self.assertIn("唯一结果直接确认", selected.query_strategy)
++
++    def test_single_location_result_is_confirmed_even_when_age_differs(self) -> None:
++        wrong_age = SearchResult("https://www.mylife.com/jane-doe/e1", "Jane Doe", "71", "Denver CO 80202")
++        session, calls = self.session([[wrong_age]])
++        selected = session.process(self.person())[0]
++        self.assertEqual(len(calls), 1)
++        self.assertEqual(selected.profile_url, wrong_age.profile_url)
++        self.assertIn("唯一结果直接确认", selected.query_strategy)
++        self.assertIn("搜索结果唯一", selected.message)
++
++    def test_historical_403_keeps_browser_when_one_result_page_is_already_usable(self) -> None:
++        url = "https://www.mylife.com/pub-multisearch.pubview?searchFirstName=Aronde&searchLastName=Hogg"
++        html = """
++        <html><head><title>Get Reputation Report details, Phone, Address &amp; more.</title></head>
++        <body><h1 class="search-result-heading">We Found 1 Result for Aronde Hogg</h1>
++        <a href="/aronde-hogg/e123">Aronde Torrez Hogg</a><div>Jacksonville, FL, 32218-7372</div></body></html>
++        """
++        documents = iter(("<html><body>Checking your browser</body></html>", html))
++        current_document = [next(documents)]
++
++        def wait_for_timeout(_milliseconds: int) -> None:
++            current_document[0] = next(documents, html)
++
++        page = SimpleNamespace(
++            url=url,
++            goto=lambda *_args, **_kwargs: SimpleNamespace(status=403),
++            title=lambda: "Get Reputation Report details, Phone, Address & more.",
++            content=lambda: current_document[0],
++            wait_for_timeout=wait_for_timeout,
++        )
++        session = object.__new__(BrowserSession)
++        session.worker_number = 2
++        session.page = page
++        session.stop_event = threading.Event()
++        session.challenge_failures = 0
++        session._captured_success = True
++        session._pause = lambda *_args: None
++        session._handle_cloudflare = lambda: None
++        session._apply_profile_geolocation = lambda: None
++        session._body_text = lambda: ""
++        session._human_scroll = lambda: None
++        logged: list[str] = []
++        session.log = logged.append
++
++        session._navigate(url)
++
++        self.assertEqual(session.challenge_failures, 0)
++        self.assertTrue(any("已渲染有效 MyLife 页面" in line for line in logged))
++
++    def test_clean_former_name_is_used_after_primary_name_has_no_age_match(self) -> None:
++        person = self.person()
++        person.original = {"former_names": "Jane Smith"}
++        wrong_age = SearchResult("https://www.mylife.com/jane-doe/e1", "Jane Doe", "71", "Denver CO 80202")
++        wrong_age_2 = SearchResult("https://www.mylife.com/jane-doe/e3", "Jane Doe", "70", "Denver CO 80202")
++        exact_alias = SearchResult("https://www.mylife.com/jane-smith/e2", "Jane Smith", "42", "Denver CO 80202")
++        session, calls = self.session([[wrong_age, wrong_age_2], [], [exact_alias]])
++        selected = session.process(person)[0]
++        self.assertEqual(len(calls), 3)
++        self.assertIn("searchFirstName=Jane", calls[2])
++        self.assertIn("searchLastName=Smith", calls[2])
++        self.assertEqual(selected.profile_url, exact_alias.profile_url)
++        self.assertTrue(selected.query_strategy.startswith("曾用名(Jane Smith)+城市州邮编"))
++
++    def test_past_location_search_runs_before_alias_when_current_and_name_have_no_age_match(self) -> None:
++        person = self.person()
++        person.original = {"past_addresses": "82 Deborah Ct, Plainfield, NJ 07062"}
++        wrong_age = SearchResult("https://www.mylife.com/jane-doe/e1", "Jane Doe", "71", "Denver CO 80202")
++        wrong_age_2 = SearchResult("https://www.mylife.com/jane-doe/e3", "Jane Doe", "70", "Denver CO 80202")
++        exact_past = SearchResult("https://www.mylife.com/jane-doe/e2", "Jane Doe", "42", "Plainfield NJ 07062")
++        session, calls = self.session([[wrong_age, wrong_age_2], [], [exact_past]])
++        selected = session.process(person)[0]
++        self.assertEqual(len(calls), 3)
++        self.assertIn("searchLocation=Plainfield%2C+NJ+07062", calls[2])
++        self.assertTrue(selected.query_strategy.startswith("姓名+曾用城市州邮编"))
++
++    def test_return_to_list_uses_saved_get_url_without_history_back(self) -> None:
++        session = object.__new__(BrowserSession)
++        session.worker_number = 1
++        session.page = SimpleNamespace(url="https://www.mylife.com/jane-doe/e1")
++        navigated: list[str] = []
++        logged: list[str] = []
++        session._close_visible_overlay = lambda: True
++
++        def navigate(url: str) -> None:
++            navigated.append(url)
++            session.page.url = url
++
++        session._navigate = navigate
++        session.capture_diagnostic = lambda *_args, **_kwargs: None
++        session.log = logged.append
++        search_url = "https://www.mylife.com/pub-multisearch.pubview?searchFirstName=Jane"
++        session._return_to_search_list(search_url)
++        self.assertEqual(navigated, [search_url])
++        self.assertTrue(any("固定 GET" in line for line in logged))
 +
 +
 +if __name__ == "__main__":
 +    unittest.main()
 diff --git a/tests/test_controller_offline.py b/tests/test_controller_offline.py
-index 7bf392f..1194bb9 100644
+index 7bf392f..f335fb9 100644
 --- a/tests/test_controller_offline.py
 +++ b/tests/test_controller_offline.py
 @@ -6,7 +6,7 @@ import unittest
  from pathlib import Path
  from unittest.mock import patch
-
+ 
 -from controller import AppController
 +from controller import AppController, _is_proxy_network_error
  from models import ProfileResult, RunConfig
-
-
+ 
+ 
 @@ -19,8 +19,7 @@ class FakeBrowserSession:
-
+ 
      def process(self, person: object) -> list[ProfileResult]:
          return [
 -            ProfileResult(1, "https://www.mylife.com/jane-doe/e1", full_name="Jane Doe", birthday="March 7, 1984"),
 -            ProfileResult(2, "https://www.mylife.com/jane-doe/e2", full_name="Jane Doe", birthday="April 8, 1985"),
 +            ProfileResult(1, "https://www.mylife.com/jane-doe/e1", full_name="Jane Doe", birthday="March 7, 1984", gender="Female", zodiac="Pisces (February 19 - March 20)"),
          ]
-
+ 
      def clear_person_data(self) -> None:
 @@ -34,6 +33,10 @@ class FakeBrowserSession:
-
-
+ 
+ 
  class ControllerOfflineTests(unittest.TestCase):
 +    def test_proxy_browser_connection_error_is_detected_for_refresh(self) -> None:
 +        self.assertTrue(_is_proxy_network_error("Page.goto: net::ERR_SOCKS_CONNECTION_FAILED"))
@@ -1937,7 +3166,7 @@ index 7bf392f..1194bb9 100644
      def test_full_pipeline_realtime_output_then_single_rebuild(self) -> None:
          with tempfile.TemporaryDirectory() as directory:
              root = Path(directory)
-@@ -47,9 +50,12 @@ class ControllerOfflineTests(unittest.TestCase):
+@@ -47,9 +50,13 @@ class ControllerOfflineTests(unittest.TestCase):
              result_path = output / "people_MyLife结果.csv"
              with result_path.open("r", encoding="utf-8-sig", newline="") as handle:
                  rows = list(csv.DictReader(handle))
@@ -1945,20 +3174,66 @@ index 7bf392f..1194bb9 100644
 +            self.assertEqual(len(rows), 1)
              self.assertEqual(rows[0]["note"], "keep")
 -            self.assertEqual(rows[1]["mylife_birthday"], "April 8, 1985")
-+            self.assertEqual(list(rows[0])[-3:], ["生日", "性别", "星座"])
++            self.assertEqual(list(rows[0])[-4:], ["生日", "性别", "星座", "备注原因"])
++            self.assertIn("搜索方式：", rows[0]["备注原因"])
 +            self.assertEqual(rows[0]["生日"], "March 7, 1984")
 +            self.assertEqual(rows[0]["性别"], "Female")
 +            self.assertEqual(rows[0]["星座"], "Pisces (February 19 - March 20)")
              with source.open("r", encoding="utf-8-sig", newline="") as handle:
                  remaining = list(csv.reader(handle))
              self.assertEqual(remaining, [["first_name", "last_name", "note"]])
+diff --git a/tests/test_cross_row_enricher.py b/tests/test_cross_row_enricher.py
+new file mode 100644
+index 0000000..c46960d
+--- /dev/null
++++ b/tests/test_cross_row_enricher.py
+@@ -0,0 +1,39 @@
++from __future__ import annotations
++
++import unittest
++
++from cross_row_enricher import enrich_cross_rows
++
++
++class CrossRowEnricherTests(unittest.TestCase):
++    def test_same_name_and_full_address_fill_missing_demographics(self) -> None:
++        original = {"full_name": "Jane Doe", "current_address": "1450 Pearl St, Denver, CO 80202"}
++        records = [
++            (1, original, {"birthday": "03/07/1984", "gender": "Female", "zodiac": "Pisces (February 19 - March 20)"}, "t1"),
++            (2, dict(original), {"birthday": "", "gender": "", "zodiac": "", "status": "无结果", "message": "网页无结果"}, "t2"),
++        ]
++        updates = enrich_cross_rows(records)
++        self.assertEqual(updates[2]["birthday"], "03/07/1984")
++        self.assertEqual(updates[2]["gender"], "Female")
++        self.assertEqual(updates[2]["zodiac"], "Pisces (February 19 - March 20)")
++        self.assertIn("跨输入行强信号", updates[2]["status"])
++
++    def test_conflicting_gender_is_not_filled(self) -> None:
++        original = {"full_name": "Jane Doe", "email_addresses": "jane@example.com"}
++        records = [
++            (1, original, {"gender": "Female"}, "t1"),
++            (2, dict(original), {"gender": "Male"}, "t2"),
++            (3, dict(original), {"gender": ""}, "t3"),
++        ]
++        self.assertNotIn(3, enrich_cross_rows(records))
++
++    def test_same_address_with_different_name_does_not_merge(self) -> None:
++        records = [
++            (1, {"full_name": "Jane Doe", "current_address": "1450 Pearl St, Denver, CO 80202"}, {"gender": "Female"}, "t1"),
++            (2, {"full_name": "John Doe", "current_address": "1450 Pearl St, Denver, CO 80202"}, {"gender": ""}, "t2"),
++        ]
++        self.assertEqual(enrich_cross_rows(records), {})
++
++
++if __name__ == "__main__":
++    unittest.main()
 diff --git a/tests/test_database_output.py b/tests/test_database_output.py
-index 439010e..12c3825 100644
+index 439010e..a9da667 100644
 --- a/tests/test_database_output.py
 +++ b/tests/test_database_output.py
 @@ -13,6 +13,37 @@ from output_writer import RealtimeCsvWriter
-
-
+ 
+ 
  class DatabaseOutputTests(unittest.TestCase):
 +    def test_proxy_network_retry_does_not_consume_person_attempt(self) -> None:
 +        with tempfile.TemporaryDirectory() as directory:
@@ -2003,15 +3278,16 @@ index 439010e..12c3825 100644
              )
              writer.put("done", job_id, "ok")
              writer.flush()
-@@ -47,13 +78,39 @@ class DatabaseOutputTests(unittest.TestCase):
+@@ -47,13 +78,123 @@ class DatabaseOutputTests(unittest.TestCase):
              with csv_writer.path.open("r", encoding="utf-8-sig", newline="") as handle:
                  rows = list(csv.DictReader(handle))
              self.assertEqual(rows[0]["name"], "Jane Doe")
 -            self.assertEqual(rows[0]["mylife_birthday"], "March 7, 1984")
-+            self.assertEqual(list(rows[0])[-3:], ["生日", "性别", "星座"])
++            self.assertEqual(list(rows[0])[-4:], ["生日", "性别", "星座", "备注原因"])
 +            self.assertEqual(rows[0]["生日"], "March 7, 1984")
 +            self.assertEqual(rows[0]["性别"], "Female")
 +            self.assertEqual(rows[0]["星座"], "Pisces (February 19 - March 20)")
++            self.assertIn("搜索方式：", rows[0]["备注原因"])
 +            replayed = database.existing_results(input_path)
 +            self.assertEqual(len(replayed), 1)
 +            self.assertFalse(csv_writer.append(*replayed[0], restoring=True))
@@ -2020,7 +3296,7 @@ index 439010e..12c3825 100644
                  mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
              self.assertEqual(mode.lower(), "wal")
              self.assertEqual(database.summary(input_path).get("done"), 1)
-
+ 
 +    def test_two_identical_source_rows_are_preserved_and_replay_is_idempotent(self) -> None:
 +        with tempfile.TemporaryDirectory() as directory:
 +            root = Path(directory)
@@ -2041,9 +3317,138 @@ index 439010e..12c3825 100644
 +            with (root / "same_MyLife结果.csv").open("r", encoding="utf-8-sig", newline="") as handle:
 +                self.assertEqual(len(list(csv.DictReader(handle))), 3)
 +
-
++    def test_old_blank_birthday_is_requeued_once_and_csv_can_rebuild(self) -> None:
++        with tempfile.TemporaryDirectory() as directory:
++            root = Path(directory)
++            input_path = root / "input.csv"
++            input_path.write_text("name\nJane Doe\n", encoding="utf-8")
++            person = PersonInput(
++                source_path=input_path.resolve(),
++                source_row=2,
++                headers=["name"],
++                original={"name": "Jane Doe"},
++                first_value="Jane Doe",
++                first_name="Jane",
++                last_name="Doe",
++            )
++            database = JobDatabase(root / "state.sqlite3")
++            database.import_people([person])
++            job_id, _, _ = database.pending_people(input_path, 3)[0]
++            old = ProfileResult(1, "", status="无结果", message="old", search_revision=1)
++            output = RealtimeCsvWriter(root, input_path, ["name"])
++            writer = DatabaseWriter(database, output, lambda _message: None)
++            writer.start()
++            writer.put("result", job_id, person, old)
++            writer.put("done", job_id, "old")
++            writer.flush()
++            writer.close()
++            self.assertEqual(database.reset_incomplete_birthdays(input_path, 2), 1)
++            self.assertEqual(database.reset_incomplete_birthdays(input_path, 2), 0)
++            rebuilt = RealtimeCsvWriter(root, input_path, ["name"], rebuild=True)
++            rebuilt.close()
++            with (root / "input_MyLife结果.csv").open("r", encoding="utf-8-sig", newline="") as handle:
++                self.assertEqual(list(csv.DictReader(handle)), [])
++            self.assertEqual(database.summary(input_path).get("pending"), 1)
++
++    def test_failed_job_is_released_on_next_run(self) -> None:
++        with tempfile.TemporaryDirectory() as directory:
++            root = Path(directory)
++            input_path = root / "input.csv"
++            input_path.write_text("name\nJane Doe\n", encoding="utf-8")
++            person = PersonInput(
++                source_path=input_path.resolve(),
++                source_row=2,
++                headers=["name"],
++                original={"name": "Jane Doe"},
++                first_value="Jane Doe",
++                first_name="Jane",
++                last_name="Doe",
++            )
++            database = JobDatabase(root / "state.sqlite3")
++            database.import_people([person])
++            job_id, _, _ = database.pending_people(input_path, 3)[0]
++            with closing(sqlite3.connect(database.path)) as connection, connection:
++                connection.execute("UPDATE jobs SET status='failed', attempts=3 WHERE id=?", (job_id,))
++            self.assertEqual(database.reset_failed_for_new_run(input_path), 1)
++            jobs = database.pending_people(input_path, 3)
++            self.assertEqual(len(jobs), 1)
++            self.assertEqual(jobs[0][2], 0)
++
++    def test_old_gender_only_gap_is_requeued_by_demographic_revision(self) -> None:
++        with tempfile.TemporaryDirectory() as directory:
++            root = Path(directory)
++            input_path = root / "input.csv"
++            input_path.write_text("name\nJane Doe\n", encoding="utf-8")
++            person = PersonInput(
++                source_path=input_path.resolve(), source_row=2, headers=["name"],
++                original={"name": "Jane Doe"}, first_value="Jane Doe",
++                first_name="Jane", last_name="Doe",
++            )
++            database = JobDatabase(root / "state.sqlite3")
++            database.import_people([person])
++            job_id, _, _ = database.pending_people(input_path, 3)[0]
++            result = ProfileResult(
++                1, "https://www.mylife.com/jane-doe/e1", birthday="03/07/1984",
++                zodiac="Pisces (February 19 - March 20)", search_revision=2,
++            )
++            output = RealtimeCsvWriter(root, input_path, ["name"])
++            writer = DatabaseWriter(database, output, lambda _message: None)
++            writer.start()
++            writer.put("result", job_id, person, result)
++            writer.put("done", job_id, "old")
++            writer.flush(); writer.close()
++            self.assertEqual(database.reset_incomplete_demographics(input_path, 3), 1)
++            self.assertEqual(database.summary(input_path).get("pending"), 1)
++
+ 
  if __name__ == "__main__":
      unittest.main()
+diff --git a/tests/test_demographics_enricher.py b/tests/test_demographics_enricher.py
+new file mode 100644
+index 0000000..91f88a9
+--- /dev/null
++++ b/tests/test_demographics_enricher.py
+@@ -0,0 +1,40 @@
++from __future__ import annotations
++
++import unittest
++from pathlib import Path
++
++from demographics_enricher import enrich_demographics, zodiac_from_birthday
++from models import PersonInput, ProfileResult
++
++
++class DemographicsEnricherTests(unittest.TestCase):
++    def test_zodiac_is_determined_from_complete_birthday(self) -> None:
++        self.assertEqual(zodiac_from_birthday("10/03/1977"), "Libra (September 23 - October 22)")
++        self.assertEqual(zodiac_from_birthday("01/02/1980"), "Capricorn (December 22 - January 19)")
++
++    def test_strict_duplicate_profile_can_supply_missing_gender(self) -> None:
++        person = PersonInput(Path("people.csv"), 2, ["name"], {"name": "Jane Doe"}, "Jane Doe", "Jane", "", "Doe")
++        selected = ProfileResult(
++            1,
++            "https://www.mylife.com/jane-doe/e1",
++            full_name="Jane Doe",
++            age="42",
++            birthday="03/07/1984",
++            profile_summary="Phone (303) 555-1234",
++        )
++        donor = ProfileResult(
++            2,
++            "https://www.mylife.com/jane-doe/e2",
++            full_name="Jane A Doe",
++            age="42",
++            gender="Female",
++            profile_summary="Phone 303-555-1234",
++        )
++        enrich_demographics(person, selected, [selected, donor])
++        self.assertEqual(selected.gender, "Female")
++        self.assertEqual(selected.zodiac, "Pisces (February 19 - March 20)")
++        self.assertIn("同身份重复档案", selected.demographics_note)
++
++
++if __name__ == "__main__":
++    unittest.main()
 diff --git a/tests/test_input_loader.py b/tests/test_input_loader.py
 index 9945348..2c694d1 100644
 --- a/tests/test_input_loader.py
@@ -2051,7 +3456,7 @@ index 9945348..2c694d1 100644
 @@ -49,6 +49,26 @@ class InputLoaderTests(unittest.TestCase):
              _, people = load_people(path)
              self.assertTrue(people[0].validation_error)
-
+ 
 +    def test_age_column_is_normalized(self) -> None:
 +        with tempfile.TemporaryDirectory() as directory:
 +            path = Path(directory) / "people.csv"
@@ -2072,26 +3477,26 @@ index 9945348..2c694d1 100644
 +            self.assertEqual(people[0].state, "CO")
 +            self.assertEqual(people[0].zip_code, "80202")
 +
-
+ 
  if __name__ == "__main__":
      unittest.main()
 diff --git a/tests/test_parser.py b/tests/test_parser.py
-index a3d2dd3..b2becd4 100644
+index a3d2dd3..879d652 100644
 --- a/tests/test_parser.py
 +++ b/tests/test_parser.py
 @@ -3,7 +3,7 @@ from __future__ import annotations
  import unittest
-
+ 
  from models import SearchResult
 -from mylife_parser import build_search_url, extract_birthday, parse_profile_html, parse_search_results
 +from mylife_parser import build_search_url, extract_age, extract_birthday, extract_gender, extract_zodiac, parse_profile_html, parse_search_results
-
-
+ 
+ 
  class ParserTests(unittest.TestCase):
-@@ -48,6 +48,40 @@ class ParserTests(unittest.TestCase):
+@@ -48,6 +48,56 @@ class ParserTests(unittest.TestCase):
          self.assertEqual(result.birthday, "")
          self.assertEqual(result.message, "详情页未公开生日")
-
+ 
 +    def test_comma_age_in_real_style_titles(self) -> None:
 +        html = '<li class="search-result"><a href="/olivia-rigor/e1">Olivia Rigor, 35</a><div>Jersey City, NJ 07306</div></li>'
 +        results, _, _ = parse_search_results(html, "https://www.mylife.com/search")
@@ -2126,7 +3531,288 @@ index a3d2dd3..b2becd4 100644
 +        result = parse_profile_html(f"<h1>Jane Doe, 48</h1>{html}", seed, 1, "姓名")
 +        self.assertEqual(result.zodiac, "Libra (September 23 - October 22)")
 +
-
++    def test_hidden_structured_birthday_gender_and_computed_zodiac(self) -> None:
++        html = '''
++        <html><head><script type="application/ld+json">
++        {"birthDate":"1977-10-03","gender":"Female"}
++        </script></head><body><h1>Jennifer Fisher, 48</h1></body></html>
++        '''
++        seed = SearchResult("https://www.mylife.com/jennifer-fisher/e1", full_name="Jennifer Fisher")
++        result = parse_profile_html(html, seed, 1, "姓名")
++        self.assertEqual(result.birthday, "10/03/1977")
++        self.assertEqual(result.gender, "Female")
++        self.assertEqual(result.zodiac, "Libra (September 23 - October 22)")
++        self.assertIn("星座=完整生日确定", result.demographics_note)
++
++    def test_partial_month_day_is_not_output_as_unique_birthday(self) -> None:
++        self.assertEqual(extract_birthday("Birthday: October 3"), "")
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+diff --git a/tests/test_proxy_pool.py b/tests/test_proxy_pool.py
+index 7f76ab8..9675c80 100644
+--- a/tests/test_proxy_pool.py
++++ b/tests/test_proxy_pool.py
+@@ -1,12 +1,13 @@
+ from __future__ import annotations
+ 
+ import tempfile
++import threading
+ import time
+ import unittest
+ from pathlib import Path
+ from unittest.mock import Mock, patch
+ 
+-from proxy_pool import ProxyPool, load_proxy_lines_from_design, parse_proxy_line
++from proxy_pool import ProxyGeo, ProxyPool, load_proxy_lines_from_design, parse_proxy_line
+ 
+ 
+ class ProxyPoolTests(unittest.TestCase):
+@@ -38,6 +39,23 @@ class ProxyPoolTests(unittest.TestCase):
+                 self.assertFalse(pool.refresh(spec))
+                 self.assertEqual(request.call_count, 1)
+ 
++    def test_wait_until_ready_keeps_retrying_instead_of_dropping_thread(self) -> None:
++        with tempfile.TemporaryDirectory() as directory:
++            spec = parse_proxy_line("proxy.example:1080:user:pass|https://refresh.example/change")
++            logs: list[str] = []
++            pool = ProxyPool([spec], Path(directory) / "state.json", log=logs.append)
++            recovered = ProxyGeo(public_ip="203.0.113.10")
++            with (
++                patch.object(pool, "check", side_effect=[None, None, recovered]) as check,
++                patch.object(pool, "refresh", return_value=False) as refresh,
++            ):
++                result = pool.wait_until_ready(spec, threading.Event(), check_interval=0.001)
++            self.assertIs(result, recovered)
++            self.assertEqual(check.call_count, 3)
++            self.assertEqual(refresh.call_count, 2)
++            self.assertTrue(any("线程保持" in message for message in logs))
++            self.assertTrue(any("已恢复" in message for message in logs))
++
+ 
+ if __name__ == "__main__":
+     unittest.main()
+diff --git a/tests/test_remark_builder.py b/tests/test_remark_builder.py
+new file mode 100644
+index 0000000..0c42491
+--- /dev/null
++++ b/tests/test_remark_builder.py
+@@ -0,0 +1,64 @@
++from __future__ import annotations
++
++import unittest
++
++from remark_builder import build_result_remark
++
++
++class RemarkBuilderTests(unittest.TestCase):
++    def test_location_match_explains_method_and_identity_reason(self) -> None:
++        remark = build_result_remark(
++            {
++                "query_strategy": "姓名+城市州邮编→年龄分层→多信号",
++                "status": "已匹配生日（高置信度）",
++                "message": "先限定 1 个同龄候选；证据=姓名完全一致、当前邮编一致",
++            }
++        )
++        self.assertIn("搜索方式：姓名+城市州邮编", remark)
++        self.assertIn("结果：已匹配生日（高置信度）", remark)
++        self.assertIn("原因：先限定 1 个同龄候选", remark)
++
++    def test_both_searches_empty_explain_fallback(self) -> None:
++        remark = build_result_remark(
++            {
++                "query_strategy": "姓名+城市州邮编→姓名",
++                "status": "无结果",
++                "message": "两级搜索均无可采集结果",
++            }
++        )
++        self.assertIn("搜索方式：姓名+城市州邮编", remark)
++        self.assertIn("两级搜索均无可采集结果", remark)
++
++    def test_winning_alias_method_and_full_search_coverage_are_both_recorded(self) -> None:
++        remark = build_result_remark(
++            {
++                "query_strategy": "曾用名(Kyasia Smith)+城市州邮编→年龄分层→多信号",
++                "search_coverage": "姓名+城市州邮编→姓名→曾用名(Kyasia Smith)+城市州邮编",
++                "status": "已匹配生日（高置信度）",
++                "message": "先限定 1 个同龄候选",
++            }
++        )
++        self.assertIn("搜索方式：曾用名(Kyasia Smith)+城市州邮编", remark)
++        self.assertIn("搜索范围：姓名+城市州邮编→姓名→曾用名(Kyasia Smith)+城市州邮编", remark)
++
++    def test_demographic_field_sources_are_recorded(self) -> None:
++        remark = build_result_remark(
++            {
++                "query_strategy": "姓名",
++                "status": "已匹配生日（高置信度）",
++                "message": "年龄和地址一致",
++                "demographics_note": "生日=MyLife详情、星座=完整生日确定",
++            }
++        )
++        self.assertIn("字段来源：生日=MyLife详情、星座=完整生日确定", remark)
++
++    def test_invalid_input_explains_no_search(self) -> None:
++        remark = build_result_remark(
++            {"query_strategy": "输入校验", "status": "输入无效", "message": "姓名至少需要名和姓"}
++        )
++        self.assertIn("搜索方式：输入校验", remark)
++        self.assertIn("姓名至少需要名和姓", remark)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tests/test_runtime_monitor.py b/tests/test_runtime_monitor.py
+new file mode 100644
+index 0000000..f86904a
+--- /dev/null
++++ b/tests/test_runtime_monitor.py
+@@ -0,0 +1,29 @@
++from __future__ import annotations
++
++import csv
++import tempfile
++import unittest
++from pathlib import Path
++
++from runtime_monitor import RuntimeHealthMonitor
++
++
++class RuntimeMonitorTests(unittest.TestCase):
++    def test_csv_audit_counts_distinct_birthdays_and_remarks(self) -> None:
++        with tempfile.TemporaryDirectory() as directory:
++            path = Path(directory) / "result.csv"
++            with path.open("w", encoding="utf-8-sig", newline="") as handle:
++                writer = csv.DictWriter(handle, fieldnames=["生日", "性别", "星座", "备注原因"])
++                writer.writeheader()
++                writer.writerow({"生日": "01/01/1980", "性别": "Female", "星座": "Capricorn", "备注原因": "命中"})
++                writer.writerow({"生日": "01/01/1980", "性别": "Male", "星座": "Capricorn", "备注原因": "命中"})
++                writer.writerow({"生日": "", "性别": "", "星座": "", "备注原因": "未公开"})
++            audit = RuntimeHealthMonitor.audit_csv(path)
++            self.assertEqual(audit["rows"], 3)
++            self.assertEqual(audit["birthdays"], 2)
++            self.assertEqual(audit["unique_birthdays"], 1)
++            self.assertEqual(audit["remarks"], 3)
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tests/test_search_planner.py b/tests/test_search_planner.py
+new file mode 100644
+index 0000000..194553d
+--- /dev/null
++++ b/tests/test_search_planner.py
+@@ -0,0 +1,53 @@
++from __future__ import annotations
++
++import unittest
++from pathlib import Path
++
++from models import PersonInput, SearchResult
++from search_planner import former_name_pairs, has_exact_age, merge_search_results, past_locations
++
++
++class SearchPlannerTests(unittest.TestCase):
++    def person(self, former_names: str) -> PersonInput:
++        return PersonInput(
++            source_path=Path("people.csv"),
++            source_row=2,
++            headers=["full_name", "former_names"],
++            original={"former_names": former_names},
++            first_value="Kyasia Moyers",
++            first_name="Kyasia",
++            last_name="Moyers",
++            age="28",
++        )
++
++    def test_former_name_filters_parser_noise_and_unrelated_people(self) -> None:
++        aliases = former_name_pairs(
++            self.person("Kyasia resided in Baltimore|Kyasia Smith|Karen Gallo|Long Beach")
++        )
++        self.assertEqual(aliases, [("Kyasia", "Smith")])
++
++    def test_exact_age_and_profile_url_merge(self) -> None:
++        first = SearchResult("https://www.mylife.com/a/e1", age="71")
++        exact = SearchResult("https://www.mylife.com/a/e2", age="28")
++        target = [first]
++        self.assertEqual(merge_search_results(target, [first, exact]), 1)
++        self.assertTrue(has_exact_age(target, "28"))
++
++    def test_past_locations_are_unique_and_skip_current_location(self) -> None:
++        person = self.person("")
++        person.city = "Baltimore"
++        person.state = "MD"
++        person.zip_code = "21218"
++        person.original = {
++            "past_addresses": (
++                "701 E 30th St, Baltimore, MD 21218|"
++                "82 Deborah Ct, Plainfield, NJ 07062|"
++                "620 Newark Ave #9, Jersey City, NJ 07306|"
++                "99 Other St, Plainfield, NJ 07062"
++            )
++        }
++        self.assertEqual(past_locations(person), ["Plainfield, NJ 07062", "Jersey City, NJ 07306"])
++
++
++if __name__ == "__main__":
++    unittest.main()
+diff --git a/tests/test_socks_bridge.py b/tests/test_socks_bridge.py
+index e97778f..aef1438 100644
+--- a/tests/test_socks_bridge.py
++++ b/tests/test_socks_bridge.py
+@@ -4,6 +4,7 @@ import socket
+ import socketserver
+ import threading
+ import unittest
++from unittest.mock import patch
+ 
+ from socks_bridge import AuthenticatedSocksBridge, RemoteSocks
+ 
+@@ -92,6 +93,45 @@ class SocksBridgeTests(unittest.TestCase):
+             remote.server_close()
+             echo.server_close()
+ 
++    def test_transient_remote_connect_failures_are_hidden_from_chromium(self) -> None:
++        echo = ThreadedServer(("127.0.0.1", 0), EchoHandler)
++        remote = ThreadedServer(("127.0.0.1", 0), FakeRemoteSocksHandler)
++        threading.Thread(target=echo.serve_forever, daemon=True).start()
++        threading.Thread(target=remote.serve_forever, daemon=True).start()
++        bridge = AuthenticatedSocksBridge(
++            RemoteSocks("127.0.0.1", remote.server_address[1], "user", "pass###")
++        )
++        bridge.start()
++        original_connect = socket.create_connection
++        remote_attempts = 0
++
++        def flaky_connect(address: tuple[str, int], *args: object, **kwargs: object) -> socket.socket:
++            nonlocal remote_attempts
++            if address == ("127.0.0.1", remote.server_address[1]):
++                remote_attempts += 1
++                if remote_attempts < 3:
++                    raise ConnectionRefusedError("transient remote proxy failure")
++            return original_connect(address, *args, **kwargs)
++
++        try:
++            with patch("socks_bridge.socket.create_connection", side_effect=flaky_connect):
++                client = original_connect(("127.0.0.1", bridge.port), timeout=5)
++                with client:
++                    client.sendall(b"\x05\x01\x00")
++                    self.assertEqual(recv_exact(client, 2), b"\x05\x00")
++                    target_port = int(echo.server_address[1])
++                    client.sendall(b"\x05\x01\x00\x01\x7f\x00\x00\x01" + target_port.to_bytes(2, "big"))
++                    self.assertEqual(recv_exact(client, 10)[:2], b"\x05\x00")
++                    client.sendall(b"retry-ok")
++                    self.assertEqual(recv_exact(client, 8), b"retry-ok")
++            self.assertEqual(remote_attempts, 3)
++        finally:
++            bridge.stop()
++            remote.shutdown()
++            echo.shutdown()
++            remote.server_close()
++            echo.server_close()
++
+ 
  if __name__ == "__main__":
      unittest.main()
 diff --git a/tests/test_source_rewriter.py b/tests/test_source_rewriter.py
@@ -2134,8 +3820,8 @@ index 3e27065..4155759 100644
 --- a/tests/test_source_rewriter.py
 +++ b/tests/test_source_rewriter.py
 @@ -11,15 +11,15 @@ from source_rewriter import remove_completed_rows
-
-
+ 
+ 
  class SourceRewriterTests(unittest.TestCase):
 -    def test_csv_is_rebuilt_once_by_first_column(self) -> None:
 +    def test_csv_is_rebuilt_by_source_row_not_duplicate_first_value(self) -> None:
@@ -2150,7 +3836,7 @@ index 3e27065..4155759 100644
                  rows = list(csv.reader(handle))
 -            self.assertEqual(rows, [["name", "note"], ["John Doe", "b"]])
 +            self.assertEqual(rows, [["name", "note"], ["John Doe", "b"], ["Jane Doe", "c"]])
-
+ 
      def test_xlsx_rebuild_preserves_unprocessed_rows(self) -> None:
          with tempfile.TemporaryDirectory() as directory:
 @@ -29,13 +29,18 @@ class SourceRewriterTests(unittest.TestCase):
@@ -2170,15 +3856,15 @@ index 3e27065..4155759 100644
              workbook.close()
              self.assertEqual(rows, [("name", "note"), ("John Doe", "b")])
 +            self.assertEqual(other_rows, [("name", "note"), ("Other Person", "must stay")])
-
-
+ 
+ 
  if __name__ == "__main__":
 diff --git a/version.py b/version.py
-index 8cdd71d..f4ec80d 100644
+index 8cdd71d..00218ca 100644
 --- a/version.py
 +++ b/version.py
 @@ -1,3 +1,3 @@
  """MyLife 正式版版本信息。"""
-
+ 
 -__version__ = "1.0.1"
-+__version__ = "1.1.0"
++__version__ = "1.1.1"

@@ -1,11 +1,11 @@
-MyLife v1.1.0 verification record
+MyLife v1.1.1 verification record
 
 CHANGED_BRANCH: main
-CHANGED_FIELDS: age_tiered_multi_signal_identity_match+birthday_gender_zodiac_output+location_first_name_fallback+detail_x_then_back+source_row_rebuild+counted_csv_replay+runtime_health_devtools+proxy_channel_refresh
+CHANGED_FIELDS: unique_result_confirmation+live_document_403_revalidation+deep_multi_signal_identity_match+birthday_gender_zodiac_remark_output+current_name_past_alias_search+stable_get_search_return+cross_row_demographic_enrichment+source_row_rebuild+counted_csv_replay+runtime_health_devtools+persistent_proxy_worker_recovery
 BASE_COMMIT: 24588fa8d50d2fbd5611d9a040b9c0452966ebb5
 ORIGINAL_HASH_RECORD: C:\Users\zhang\Desktop\mylife\verification\original_hashes.sha256
 DESIGN_FILE_START_SHA256: 8588065E7D5F193A614CF1439417EF7CFB15C5450702F0A7BE86052B5918D94A
-DESIGN_FILE_CURRENT_USER_STATE_SHA256_PRESERVED: 60E487041B8B9A451462F2B189934556C63FFE5B3FA83A3539D60912C4156C3D
+DESIGN_FILE_CURRENT_USER_STATE_SHA256_PRESERVED: 38BD37877F6A6CAA399071568AD0EDE475CE73E2D170D7F83D77545CB448BFFE
 TURNSTILE_MODULE_SHA256_UNCHANGED: BEA2D6F251594CABDF5748FC24A188D18DF1DA9E8AB93D5394D4F1637B046654
 
 FOUR_ARTIFACTS:
@@ -23,45 +23,66 @@ Ran 18 tests in 0.863s
 
 OK
 EXIT_STATUS: 0
-BASELINE_BEHAVIOR: v1.0.1 launcher + v1.0.0 collection; output had no age-aware unique identity matching and no gender/zodiac columns.
+BASELINE_BEHAVIOR: v1.0.1 launcher + v1.0.0 collection; no unique-result confirmation, no live-document 403 revalidation, no deep demographic matching, and no gender/zodiac/remark output.
 
 MODIFIED:
 COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; python -B -m unittest discover -s tests -v
-INPUT: C:\Users\zhang\Desktop\codex_tmp\mylife_monitor_fix_20260811 (v1.1.0 modified source)
+INPUT: C:\Users\zhang\Desktop\mylife @ 0a8def30b2c825558aad28e9c6278fe9a2096335
 LITERAL_RESULT:
 ----------------------------------------------------------------------
-Ran 35 tests in 1.347
+Ran 66 tests in 2.734s
 
 OK
 EXIT_STATUS: 0
-COMMAND_2: $env:PYTHONDONTWRITEBYTECODE='1'; python -B main.py --check
-INPUT_2: C:\Users\zhang\Desktop\codex_tmp\mylife_monitor_fix_20260811
+COMMAND_2: $env:PYTHONDONTWRITEBYTECODE='1'; $env:PYTHONIOENCODING='utf-8'; python -B main.py --check
+INPUT_2: C:\Users\zhang\Desktop\mylife @ 0a8def30b2c825558aad28e9c6278fe9a2096335
 LITERAL_RESULT_2:
 依赖检查通过，已安装项全部跳过。
 SELF_CHECK_OK
 EXIT_STATUS_2: 0
-MODIFIED_BEHAVIOR: location search runs first and name-only runs only after zero location results; all candidates from the selected strategy are age-tiered and scored with name, former name, phone, email, current/past address, ZIP, street number/prefix, city/state, relatives and associates; CSV appends only 生日/性别/星座; a failed proxy channel is retired without consuming the person retry budget and the job is handed to another thread.
+MODIFIED_BEHAVIOR: one result across all pages is confirmed directly; current rendered MyLife content overrides a stale initial HTTP 403; multi-candidate searches use age tiers and exact phone/email/address plus ZIP/street/city/name/relations; CSV ends with birthday/gender/zodiac/remark; GET return, cross-row enrichment, SQLite replay, and persistent four-worker recovery remain enabled.
 
 LIVE_BROWSER:
-COMMAND: python -B - [one-row direct MyLife AppController probe, 小窗口, max_search_pages=3]
-INPUT: one real previously successful row copied only into C:\Users\zhang\Desktop\codex_tmp\mylife_monitor_fix_20260811\live_location_only_final\sample.csv
+COMMAND: Start-Process C:\Python312\pythonw.exe -ArgumentList '-B','main.py','--auto-start' -WorkingDirectory C:\Users\zhang\Desktop\mylife -PassThru
+INPUT: C:\Users\zhang\Desktop\mylife\测试文件1.xlsx; previous GUI configuration; fresh C:\Users\zhang\Desktop\mylife\.mylife_runtime\profiles
 LITERAL_RESULT:
-LIVE_RESULT {"status": "已完成", "rows": 1, "location_searches": 1, "name_only_searches": 0, "return_to_list": 1, "return_fallback_error": 0, "multi_signal_log": 1, "final_fields": ["生日", "性别", "星座"], "birthday": true, "gender": true, "zodiac": true, "input_remaining": 0, "runtime_exists": false}
+GUI_PID=26528
+GUI_ALIVE=True
+PROFILES=worker-1,worker-2,worker-3,worker-4
+LOG=C:\Users\zhang\Desktop\mylife\logs\run_20260811_040833.log
+KEEP_VALID_403=5
+CF_FAIL=1 (diagnostic screenshot is an actual still-visible security-verification page, not a usable result page)
+CACHE_MISS=0
+CSV_ROWS=31
+CSV_LAST_FIELDS=生日,性别,星座,备注原因
+CSV_BIRTHDAYS=24
+CSV_GENDERS=21
+CSV_ZODIACS=24
+CSV_REMARKS=31
+DB_STATUS=done:31,pending:3518,retry:5,running:4
 EXIT_STATUS: 0
-LIVE_BEHAVIOR: Cloudflare passed; one location-search candidate was collected; visible X was clicked; browser returned one step to the search list; exactly one output row contained birthday, gender and zodiac; clean completion removed the probe input row and runtime cache.
+LIVE_BEHAVIOR: valid result pages that replaced initial 403 responses remained open and continued collection; actual unresolved challenge pages alone entered challenge recovery; four worker profiles and four running jobs remained active.
+
+INPUT_SIGNAL_AUDIT:
+INPUT_ROWS=3558
+QUERY_PHONE_NONEMPTY=3558
+QUERY_PHONE_PREVIOUSLY_UNCOVERED=1532
+CLEAN_FORMER_NAME_ROWS=921
+DISTINCT_PAST_LOCATION_ROWS=3182
+PAST_LOCATION_AVERAGE=2.66
+MIDDLE_NAME_ROWS=79
+EMAIL_ROWS=2810
+RELATIVE_ROWS=3387
+ASSOCIATE_ROWS=3455
+PROPERTY_JSON_ADDRESS_ROWS=3558
 
 ROLLBACK:
-COMMAND: bash ROLLBACK.sh C:/Users/zhang/Desktop/codex_tmp/mylife_rollback_verify_20260811
-INPUT: independent clone of final v1.1.0 commit
-LITERAL_RESULT:
-ROLLBACK_OK base=24588fa files=24 version_sha256=8740E1202A509450D8164DECBB30E06C5D9E307209FE1C9D3916E8A59E52798C restored_behavior=v1.0.1_launcher_and_v1.0.0_collection
-EXIT_STATUS: 0
+COMMAND: bash -lc "'/mnt/c/Users/zhang/Desktop/codex_tmp/mylife_rollback_verify_v111_20260811/ROLLBACK.sh' '/mnt/c/Users/zhang/Desktop/codex_tmp/mylife_rollback_verify_v111_20260811'"
+INPUT: independent clone of final v1.1.1 commit
+LITERAL_RESULT: PENDING_VERIFIED_ROLLBACK
+EXIT_STATUS: PENDING
 COMMAND_2: $env:PYTHONDONTWRITEBYTECODE='1'; python -B -m unittest discover -s tests -v
 INPUT_2: same rollback clone after ROLLBACK.sh
-LITERAL_RESULT_2:
-----------------------------------------------------------------------
-Ran 18 tests in 1.832
-
-OK
-EXIT_STATUS_2: 0
-RESTORED_BEHAVIOR_STATUS: version.py restored to SHA256 8740E1202A509450D8164DECBB30E06C5D9E307209FE1C9D3916E8A59E52798C (v1.0.1); identity_matcher.py/runtime_monitor.py removed; baseline 18-test behavior restored; formal MODIFIED_FILE remains changed.
+LITERAL_RESULT_2: PENDING_BASELINE_RETEST
+EXIT_STATUS_2: PENDING
+RESTORED_BEHAVIOR_STATUS: PENDING

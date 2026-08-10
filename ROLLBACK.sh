@@ -60,7 +60,7 @@ restored_hash = hashlib.sha256((root / "version.py").read_bytes()).hexdigest().u
 if restored_hash != expected_restored_hash:
     raise SystemExit(f"ROLLBACK_ABORT restored version hash mismatch: {restored_hash}")
 if (root / "identity_matcher.py").exists() or (root / "runtime_monitor.py").exists():
-    raise SystemExit("ROLLBACK_ABORT v1.1.0-only module still exists")
+    raise SystemExit("ROLLBACK_ABORT modified-only module still exists")
 print(
     f"ROLLBACK_OK base={base_commit[:7]} files={len(changed)} "
     f"version_sha256={restored_hash} restored_behavior=v1.0.1_launcher_and_v1.0.0_collection"
