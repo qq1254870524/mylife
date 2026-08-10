@@ -423,9 +423,10 @@ class BrowserSession:
         search_results: list[SearchResult] = []
         strategies_used: list[str] = []
         last_search_url = ""
+        single_result: SearchResult | None = None
 
         def run_search(label: str, first_name: str, last_name: str, location: str = "") -> list[SearchResult]:
-            nonlocal last_search_url
+            nonlocal last_search_url, single_result
             last_search_url = build_search_url(first_name, last_name, location)
             self.log(f"线程{self.worker_number} 开始{label}搜索")
             batch = self._collect_search_results(last_search_url)
@@ -433,6 +434,11 @@ class BrowserSession:
                 item.found_by = item.found_by or label
             merge_search_results(search_results, batch)
             strategies_used.append(label)
+            if len(batch) == 1:
+                single_result = batch[0]
+                self.log(
+                    f"线程{self.worker_number} {label}搜索结果唯一，按规则直接确定该候选，停止扩展搜索"
+                )
             return batch
 
         if person.location:
@@ -440,7 +446,7 @@ class BrowserSession:
             if not location_results:
                 self.log(f"线程{self.worker_number} 姓名+城市州邮编无结果，按规则回退姓名搜索")
                 run_search("姓名", person.first_name, person.last_name)
-            elif person.age and not has_exact_age(location_results, person.age):
+            elif single_result is None and person.age and not has_exact_age(location_results, person.age):
                 self.log(
                     f"线程{self.worker_number} 地点结果有 {len(location_results)} 人但没有年龄 {person.age}，"
                     "继续姓名搜索并合并候选"
@@ -449,20 +455,23 @@ class BrowserSession:
         else:
             run_search("姓名", person.first_name, person.last_name)
 
-        if person.age and not has_exact_age(search_results, person.age):
+        if single_result is None and person.age and not has_exact_age(search_results, person.age):
             for old_location in past_locations(person):
                 run_search("姓名+曾用城市州邮编", person.first_name, person.last_name, old_location)
-                if has_exact_age(search_results, person.age):
+                if single_result is not None or has_exact_age(search_results, person.age):
                     break
 
-        if (not search_results or (person.age and not has_exact_age(search_results, person.age))):
+        if single_result is None and (not search_results or (person.age and not has_exact_age(search_results, person.age))):
             for alias_first, alias_last in former_name_pairs(person):
                 alias_label = f"曾用名({alias_first} {alias_last})+城市州邮编" if person.location else f"曾用名({alias_first} {alias_last})"
                 alias_results = run_search(alias_label, alias_first, alias_last, person.location)
-                if person.location and (not alias_results or (person.age and not has_exact_age(alias_results, person.age))):
+                if single_result is None and person.location and (not alias_results or (person.age and not has_exact_age(alias_results, person.age))):
                     run_search(f"曾用名({alias_first} {alias_last})", alias_first, alias_last)
-                if person.age and has_exact_age(search_results, person.age):
+                if single_result is not None or (person.age and has_exact_age(search_results, person.age)):
                     break
+
+        if single_result is not None:
+            search_results = [single_result]
 
         strategy_used = "→".join(strategies_used) or "未执行搜索"
         if not search_results:
@@ -501,6 +510,9 @@ class BrowserSession:
                 raise RuntimeError(f"详情页采集失败 {search_result.profile_url}: {type(exc).__name__}: {exc}") from exc
         selected = select_best_birthday(person, details, len(search_results))
         selected = enrich_demographics(person, selected, details)
+        if len(search_results) == 1:
+            selected.message = f"搜索结果唯一，按规则直接确定；{selected.message}"
+            selected.query_strategy = f"{selected.query_strategy}→唯一结果直接确认"
         self.log(
             f"线程{self.worker_number} 匹配完成：候选={len(details)}，"
             f"选中年龄={selected.age or '空'}，生日={'已提取' if selected.birthday else '未公开'}；"

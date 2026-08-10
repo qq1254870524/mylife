@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 
-SEARCH_REVISION = 3
+SEARCH_REVISION = 4
 
 
 @dataclass(slots=True)

@@ -59,27 +59,29 @@ class BrowserStrategyTests(unittest.TestCase):
     def test_location_zero_results_then_runs_name_only_search(self) -> None:
         hit = SearchResult("https://www.mylife.com/jane-doe/e1", "Jane Doe", "42", "Denver CO 80202")
         session, calls = self.session([[], [hit]])
-        session.process(self.person())
+        selected = session.process(self.person())[0]
         self.assertEqual(len(calls), 2)
         self.assertIn("searchLocation=", calls[0])
         self.assertIn("search=Jane+Doe", calls[1])
+        self.assertEqual(selected.profile_url, hit.profile_url)
+        self.assertIn("唯一结果直接确认", selected.query_strategy)
 
-    def test_location_wrong_age_results_are_merged_with_name_search(self) -> None:
+    def test_single_location_result_is_confirmed_even_when_age_differs(self) -> None:
         wrong_age = SearchResult("https://www.mylife.com/jane-doe/e1", "Jane Doe", "71", "Denver CO 80202")
-        exact_age = SearchResult("https://www.mylife.com/jane-doe/e2", "Jane Doe", "42", "Aurora CO 80012")
-        session, calls = self.session([[wrong_age], [wrong_age, exact_age]])
+        session, calls = self.session([[wrong_age]])
         selected = session.process(self.person())[0]
-        self.assertEqual(len(calls), 2)
-        self.assertEqual(selected.profile_url, exact_age.profile_url)
-        self.assertEqual(selected.query_strategy.split("→", 1)[0], "姓名")
-        self.assertIn("姓名+城市州邮编→姓名", selected.search_coverage)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(selected.profile_url, wrong_age.profile_url)
+        self.assertIn("唯一结果直接确认", selected.query_strategy)
+        self.assertIn("搜索结果唯一", selected.message)
 
     def test_clean_former_name_is_used_after_primary_name_has_no_age_match(self) -> None:
         person = self.person()
         person.original = {"former_names": "Jane Smith"}
         wrong_age = SearchResult("https://www.mylife.com/jane-doe/e1", "Jane Doe", "71", "Denver CO 80202")
+        wrong_age_2 = SearchResult("https://www.mylife.com/jane-doe/e3", "Jane Doe", "70", "Denver CO 80202")
         exact_alias = SearchResult("https://www.mylife.com/jane-smith/e2", "Jane Smith", "42", "Denver CO 80202")
-        session, calls = self.session([[wrong_age], [], [exact_alias]])
+        session, calls = self.session([[wrong_age, wrong_age_2], [], [exact_alias]])
         selected = session.process(person)[0]
         self.assertEqual(len(calls), 3)
         self.assertIn("searchFirstName=Jane", calls[2])
@@ -91,8 +93,9 @@ class BrowserStrategyTests(unittest.TestCase):
         person = self.person()
         person.original = {"past_addresses": "82 Deborah Ct, Plainfield, NJ 07062"}
         wrong_age = SearchResult("https://www.mylife.com/jane-doe/e1", "Jane Doe", "71", "Denver CO 80202")
+        wrong_age_2 = SearchResult("https://www.mylife.com/jane-doe/e3", "Jane Doe", "70", "Denver CO 80202")
         exact_past = SearchResult("https://www.mylife.com/jane-doe/e2", "Jane Doe", "42", "Plainfield NJ 07062")
-        session, calls = self.session([[wrong_age], [], [exact_past]])
+        session, calls = self.session([[wrong_age, wrong_age_2], [], [exact_past]])
         selected = session.process(person)[0]
         self.assertEqual(len(calls), 3)
         self.assertIn("searchLocation=Plainfield%2C+NJ+07062", calls[2])
