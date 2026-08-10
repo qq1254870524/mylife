@@ -1,87 +1,82 @@
-MyLife v1.1.2 verification record
+MyLife launcher verification record
 
 CHANGED_BRANCH: main
-CHANGED_FIELDS: csv_txt_realtime_explicit_result_row_deletion+xlsx_xlsm_deferred_single_pass_row_deletion+stopped_worker_join_single_pass_cleanup+stable_resume_identity
-BASE_COMMIT: 628d2035526d0c21a6bc4ec40f46c25272ebb81c
-ORIGINAL_CONTROLLER_SHA256: D2536C0098902A1BF2E9B97C1996B90D3DC018765E618DE3A78C153F1763A492
-MODIFIED_CONTROLLER_SHA256: B5B371E7E67742EE868548EC5FD2FFA7477BA7BDBDEE6E16F5E590245B7CB392
-DESIGN_FILE_SHA256_PRESERVED: 38BD37877F6A6CAA399071568AD0EDE475CE73E2D170D7F83D77545CB448BFFE
-TURNSTILE_MODULE_SHA256_UNCHANGED: BEA2D6F251594CABDF5748FC24A188D18DF1DA9E8AB93D5394D4F1637B046654
+CHANGED_FIELDS: detached_pythonw_gui_launcher+crlf_cmd_preservation
+BASE_COMMIT: d898737cd034419bc0f3492562a1ffd46dc0862f
+ORIGINAL_LAUNCHER_SHA256: C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF
+MODIFIED_LAUNCHER_SHA256: 11566CB78669E0CE38C538498523BC9487BADBEB284F8E89CB9213AAB2A8C31F
+DESIGN_FILE_SHA256_PRESERVED: 8C4E05788C67189313709DE5C533FCE342662F13524A0EC9DBA5D6D55EF36F09
 
 FOUR_ARTIFACTS:
-MODIFIED_FILE: C:\Users\zhang\Desktop\mylife\MODIFIED_FILE
-DIFF_FILE: C:\Users\zhang\Desktop\mylife\DIFF_FILE
-VERIFICATION.txt: C:\Users\zhang\Desktop\mylife\VERIFICATION.txt
-ROLLBACK.sh: C:\Users\zhang\Desktop\mylife\ROLLBACK.sh
+MODIFIED_FILE: E:\mylife\MODIFIED_FILE
+DIFF_FILE: E:\mylife\DIFF_FILE
+VERIFICATION.txt: E:\mylife\VERIFICATION.txt
+ROLLBACK.sh: E:\mylife\ROLLBACK.sh
 
 BASELINE:
-COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; $env:PYTHONIOENCODING='utf-8'; python -B -m unittest discover -s tests -v
-INPUT: C:\Users\zhang\Desktop\mylife @ 628d2035526d0c21a6bc4ec40f46c25272ebb81c
+COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; python -B - (launcher static assertions)
+INPUT: C:\Users\zhang\Desktop\codex_tmp\mylife_launcher_no_console_20260811\启动MyLife正式版.cmd @ SHA256 C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF
 LITERAL_RESULT:
-----------------------------------------------------------------------
-Ran 72 tests in 3.488s
-
-OK
+uses_console_bootstrap=True
+uses_blocking_console_main=True
+uses_pythonw=False
+BASELINE_OK persistent_console_launcher_reproduced
 EXIT_STATUS: 0
-BASELINE_BEHAVIOR: XLSX/XLSM stayed unchanged during processing and rebuilt once after natural completion, but the stop branch logged that no input rebuild was performed and retained completed rows.
+BASELINE_BEHAVIOR: cmd.exe remained attached to python -B main.py for the full GUI lifetime, producing the persistent black Python console window.
 
 MODIFIED:
-COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; $env:PYTHONIOENCODING='utf-8'; python -B -m unittest discover -s tests -v
-INPUT: C:\Users\zhang\Desktop\mylife @ 6d0a0dc73135baca43e44483687ce70457d65e21
+COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; python -B - (launcher static assertions)
+INPUT: E:\mylife\启动MyLife正式版.cmd @ 67829f55614283a9bad6dccbf01be3b9f03f5c47
 LITERAL_RESULT:
-----------------------------------------------------------------------
-Ran 73 tests in 3.198s
-
-OK
+uses_console_bootstrap=False
+uses_blocking_console_main=False
+uses_detached_pythonw=True
+has_crlf_only=True
+FORMAL_STATIC_OK detached_pythonw_crlf
 EXIT_STATUS: 0
-COMMAND_2: $env:PYTHONDONTWRITEBYTECODE='1'; $env:PYTHONIOENCODING='utf-8'; python -B -m unittest tests.test_controller_offline.ControllerOfflineTests.test_stopped_xlsx_waits_for_worker_then_bulk_deletes_completed_rows -v
-INPUT_2: C:\Users\zhang\Desktop\mylife @ 6d0a0dc73135baca43e44483687ce70457d65e21
+COMMAND_2: cmd.exe /d /c .\启动MyLife正式版.cmd
+INPUT_2: isolated stub fixture containing the modified launcher
 LITERAL_RESULT_2:
-test_stopped_xlsx_waits_for_worker_then_bulk_deletes_completed_rows (tests.test_controller_offline.ControllerOfflineTests.test_stopped_xlsx_waits_for_worker_then_bulk_deletes_completed_rows) ... ok
-
+CMD_EXIT_STATUS=0
+CMD_RETURN_MS=76
+EXECUTABLE=C:\Python312\pythonw.exe
+CHILD_PID=101200
+CHILD_CWD=C:\Users\zhang\Desktop\codex_tmp\mylife_launcher_no_console_20260811\dynamic_fixture
+MODIFIED_DYNAMIC_OK no_persistent_python_console
+EXIT_STATUS_2: 0
+COMMAND_3: $env:PYTHONDONTWRITEBYTECODE='1'; $env:PYTHONIOENCODING='utf-8'; python -B -m unittest discover -s tests -v
+INPUT_3: E:\mylife @ 67829f55614283a9bad6dccbf01be3b9f03f5c47
+LITERAL_RESULT_3:
 ----------------------------------------------------------------------
-Ran 1 test in 0.143s
+Ran 73 tests in 4.338s
 
 OK
-EXIT_STATUS_2: 0
-MODIFIED_BEHAVIOR: stop waits until every worker joins and the SQLite/CSV writer closes, then opens XLSX/XLSM once and bulk-deletes all done records; pending rows, other worksheets, and SQLite resume state remain.
-
-LIVE_STOP_REPAIR:
-COMMAND: $env:PYTHONDONTWRITEBYTECODE='1'; python -B - (JobDatabase.done_people + RealtimeInputRewriter.remove_people)
-INPUT: C:\Users\zhang\Desktop\mylife\测试文件1.xlsx; stopped run C:\Users\zhang\Desktop\mylife\logs\run_20260811_044307.log; SQLite done records
-LITERAL_RESULT:
-SOURCE=C:\Users\zhang\Desktop\mylife\测试文件1.xlsx
-DONE_RECORDS=4 REMOVED=4 BEFORE_ROWS=3558 AFTER_ROWS=3554
-OTHER_SHEETS_UNCHANGED=True
-STOP_REBUILD_VERIFY_OK
-EXIT_STATUS: 0
-LIVE_RESTORED_BEHAVIOR: the four explicit-result rows left by the pre-fix stopped run were deleted in one post-stop workbook rebuild; SHA256 changed from 2DD5515D4F524964BF62448362DF8BC181EC535B4FC9393BACA5380FDA4871E1 to D276E7B45EF65065A63A1CC4B8B5440FFF897C3C3E4D479F1A42DA43DA7B2955; all non-active worksheets were unchanged.
+EXIT_STATUS_3: 0
+MODIFIED_BEHAVIOR: cmd.exe starts pythonw.exe detached and exits immediately; bootstrap still runs inside main.py; no persistent cmd.exe or python.exe console remains; CRLF bytes are preserved.
 
 LIVE_GUI:
-COMMAND: Start-Process -FilePath 'C:\Python312\pythonw.exe' -ArgumentList '-B','main.py','--auto-start' -WorkingDirectory 'C:\Users\zhang\Desktop\mylife' -PassThru
-INPUT: C:\Users\zhang\Desktop\mylife\测试文件1.xlsx; saved configuration; 4 threads; fresh profiles; SQLite resume
+COMMAND: cmd.exe /d /c "E:\mylife\启动MyLife正式版.cmd"
+INPUT: E:\mylife formal launcher
 LITERAL_RESULT:
-GUI_PID=30064
-GUI_ALIVE=True
-CURRENT_INPUT_ROWS=3554
-DB_STATUS=done:4,pending:3552,retry:2
-CSV=rows:4,birthdays:1,genders:2,zodiacs:1,remarks:4
-THREADS=total:4,alive:4
+PYTHONW_GUI_COUNT=1
+BLOCKING_CONSOLE_PROCESS_COUNT=0
+PID=16224 NAME=pythonw.exe COMMAND=pythonw.exe -B "E:\mylife\main.py"
+FORMAL_DYNAMIC_OK pythonw_gui_alive_no_cmd_or_python_console
 EXIT_STATUS: 0
-LIVE_BEHAVIOR: GUI restarted with the selected XLSX, four fresh profiles, preserved pending jobs, and corrected post-stop deletion state.
+LIVE_BEHAVIOR: visible MyLife GUI is responsive while no persistent black cmd.exe/python.exe console exists.
 
 ROLLBACK:
-COMMAND: bash -lc "'/mnt/c/Users/zhang/Desktop/codex_tmp/mylife_rollback_verify_v112_stop_final_20260811/ROLLBACK.sh' '/mnt/c/Users/zhang/Desktop/codex_tmp/mylife_rollback_verify_v112_stop_final_20260811'"
-INPUT: independent clone of final v1.1.2 commit
+COMMAND: bash -lc "'/mnt/c/Users/zhang/Desktop/codex_tmp/mylife_launcher_rollback_verify_20260811/ROLLBACK.sh' '/mnt/c/Users/zhang/Desktop/codex_tmp/mylife_launcher_rollback_verify_20260811'"
+INPUT: independent clone of final launcher commit
 LITERAL_RESULT:
-ROLLBACK_OK base=628d203 files=4 controller_sha256=D2536C0098902A1BF2E9B97C1996B90D3DC018765E618DE3A78C153F1763A492 restored_behavior=stop_keeps_deferred_xlsx_rows
+ROLLBACK_OK base=d898737 files=1 launcher_sha256=C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF restored_behavior=blocking_console_python_launcher
 EXIT_STATUS: 0
-COMMAND_2: $env:PYTHONDONTWRITEBYTECODE='1'; $env:PYTHONIOENCODING='utf-8'; python -B -m unittest discover -s tests -v
+COMMAND_2: $env:PYTHONDONTWRITEBYTECODE='1'; python -B - (restored launcher static assertions)
 INPUT_2: same rollback clone after ROLLBACK.sh
 LITERAL_RESULT_2:
-----------------------------------------------------------------------
-Ran 72 tests in 4.015s
-
-OK
+uses_console_bootstrap=True
+uses_blocking_console_main=True
+uses_pythonw=False
+ROLLBACK_STATIC_OK blocking_console_behavior_restored
 EXIT_STATUS_2: 0
-RESTORED_BEHAVIOR_STATUS: controller.py restored to SHA256 D2536C0098902A1BF2E9B97C1996B90D3DC018765E618DE3A78C153F1763A492; the old stop branch again retained done XLSX/XLSM rows; formal MODIFIED_FILE remains on post-stop single-pass deletion.
+RESTORED_BEHAVIOR_STATUS: launcher SHA256 restored to C8B2D5AAA4DA493053A65147E66E0C2A6350D08BD7393C2352B3F0A84705D9BF; formal MODIFIED_FILE remains on detached pythonw behavior.
