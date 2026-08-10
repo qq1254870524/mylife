@@ -59,6 +59,7 @@ class AppController:
         self.diagnostics_dir = self.runtime_dir / "diagnostics" / self.log_path.stem
         self._final_status = "未开始"
         self.input_rewriter = RealtimeInputRewriter(self.config.input_file)
+        self._defer_input_rewrite = self.config.input_file.suffix.lower() in {".xlsx", ".xlsm"}
 
     def _log(self, message: str) -> None:
         clean = str(message).replace("\r", " ").strip()
@@ -190,12 +191,18 @@ class AppController:
                     results = session.process(person)
                     # 结果、完成状态和实时 CSV 先由唯一写线程同步落盘；确认后才删输入行。
                     writer.put_sync("complete", job_id, person, tuple(results), f"输出 {len(results)} 条")
-                    removed = self.input_rewriter.remove_person(person)
                     challenge_streak = 0
-                    self._log(
-                        f"线程{worker_number} 完成输入原第 {person.source_row} 行，输出 {len(results)} 条；"
-                        f"明确结果已实时删除输入行 {removed} 条"
-                    )
+                    if self._defer_input_rewrite:
+                        self._log(
+                            f"线程{worker_number} 完成输入原第 {person.source_row} 行，输出 {len(results)} 条；"
+                            "XLSX/XLSM 处理中不删行，等待全部线程结束后一次性删除"
+                        )
+                    else:
+                        removed = self.input_rewriter.remove_person(person)
+                        self._log(
+                            f"线程{worker_number} 完成输入原第 {person.source_row} 行，输出 {len(results)} 条；"
+                            f"明确结果已实时删除输入行 {removed} 条"
+                        )
                     session.clear_person_data()
                 except Cancelled:
                     writer.put("retry", job_id, "用户停止")
@@ -294,9 +301,10 @@ class AppController:
             )
             if restored:
                 self._log(f"从 SQLite 断点恢复实时 CSV：补写 {restored} 行")
-            catchup_removed = self.input_rewriter.remove_people(self.database.done_people(self.config.input_file))
-            if catchup_removed:
-                self._log(f"启动断点核对：已补删 {catchup_removed} 条此前已有明确结果的输入行")
+            if not self._defer_input_rewrite:
+                catchup_removed = self.input_rewriter.remove_people(self.database.done_people(self.config.input_file))
+                if catchup_removed:
+                    self._log(f"启动断点核对：已补删 {catchup_removed} 条此前已有明确结果的输入行")
             writer = DatabaseWriter(self.database, csv_writer, self._log)
             writer.start()
             job_queue: queue.Queue[tuple[int, PersonInput, int]] = queue.Queue()
@@ -360,14 +368,27 @@ class AppController:
                     self._final_status = "失败"
                 else:
                     failed = summary.get("failed", 0)
+                    deferred_removed = 0
+                    if self._defer_input_rewrite:
+                        # Excel 工作簿在处理过程中始终保持行号和结构不变；全部 worker join、
+                        # SQLite/CSV 写线程关闭后才打开一次工作簿并批量删掉所有明确结果行。
+                        deferred_removed = self.input_rewriter.remove_people(
+                            self.database.done_people(self.config.input_file)
+                        )
                     self._finished_clean = failed == 0
                     self._final_status = "已完成" if self._finished_clean else "失败"
                     self._emit_progress(self._final_status)
                     purged = self.database.delete_source(self.config.input_file)
-                    self._log(
-                        "全部处理线程结束；每条明确结果均已在 SQLite/CSV 提交后实时删除输入行；"
-                        f"清理断点任务 {purged} 条；失败保留 {failed} 行"
-                    )
+                    if self._defer_input_rewrite:
+                        self._log(
+                            f"全部处理线程结束后已一次性重建 XLSX/XLSM，并删除 {deferred_removed} 条明确结果；"
+                            f"清理断点任务 {purged} 条；失败保留 {failed} 行"
+                        )
+                    else:
+                        self._log(
+                            "全部处理线程结束；每条明确结果均已在 SQLite/CSV 提交后实时删除输入行；"
+                            f"清理断点任务 {purged} 条；失败保留 {failed} 行"
+                        )
         except Exception as exc:
             self._log(f"任务终止：{type(exc).__name__}: {exc}")
             self._emit_progress("失败")

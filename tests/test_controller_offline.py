@@ -6,6 +6,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import openpyxl
+
 from controller import AppController, _is_proxy_network_error
 from models import ProfileResult, RunConfig
 
@@ -21,8 +23,15 @@ class FakeBrowserSession:
 
     def process(self, person: object) -> list[ProfileResult]:
         source = getattr(person, "source_path")
-        with source.open("r", encoding="utf-8-sig", newline="") as handle:
-            self.observed_input_counts.append(max(0, len(list(csv.reader(handle))) - 1))
+        if source.suffix.lower() in {".xlsx", ".xlsm"}:
+            workbook = openpyxl.load_workbook(source, read_only=True, data_only=True)
+            try:
+                self.observed_input_counts.append(max(0, workbook.active.max_row - 1))
+            finally:
+                workbook.close()
+        else:
+            with source.open("r", encoding="utf-8-sig", newline="") as handle:
+                self.observed_input_counts.append(max(0, len(list(csv.reader(handle))) - 1))
         return [
             ProfileResult(1, "https://www.mylife.com/jane-doe/e1", full_name="Jane Doe", birthday="March 7, 1984", gender="Female", zodiac="Pisces (February 19 - March 20)"),
         ]
@@ -75,6 +84,29 @@ class ControllerOfflineTests(unittest.TestCase):
             self.assertEqual(remaining, [["first_name", "last_name", "note"]])
             self.assertEqual(sorted(FakeBrowserSession.observed_input_counts), [1, 2])
             self.assertFalse((output / ".mylife_runtime" / "profiles").exists())
+
+    def test_xlsx_keeps_all_rows_during_processing_then_deletes_once(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "people.xlsx"
+            workbook = openpyxl.Workbook()
+            workbook.active.append(["first_name", "last_name", "note"])
+            workbook.active.append(["Jane", "Doe", "first"])
+            workbook.active.append(["John", "Doe", "second"])
+            workbook.create_sheet("keep").append(["other sheet", "must stay"])
+            workbook.save(source)
+            workbook.close()
+            controller = AppController(RunConfig(source, root / "output", thread_count=1, browser_mode="无头"))
+            FakeBrowserSession.observed_input_counts = []
+            with patch("controller.BrowserSession", FakeBrowserSession):
+                controller.run()
+            self.assertEqual(FakeBrowserSession.observed_input_counts, [2, 2])
+            workbook = openpyxl.load_workbook(source, read_only=True, data_only=True)
+            try:
+                self.assertEqual(list(workbook.active.iter_rows(values_only=True)), [("first_name", "last_name", "note")])
+                self.assertEqual(list(workbook["keep"].iter_rows(values_only=True)), [("other sheet", "must stay")])
+            finally:
+                workbook.close()
 
     def test_proxy_thread_limit_validation(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
