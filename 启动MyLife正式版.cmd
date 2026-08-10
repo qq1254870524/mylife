@@ -1,12 +1,11 @@
 @echo off
 setlocal
-chcp 65001 >nul
 cd /d "%~dp0"
 set "PYTHONDONTWRITEBYTECODE=1"
 
-python -B bootstrap.py
+where pythonw.exe >nul 2>&1
 if errorlevel 1 goto :error
-python -B main.py
+start "" pythonw.exe -B "%~dp0main.py"
 if errorlevel 1 goto :error
 endlocal
 exit /b 0
