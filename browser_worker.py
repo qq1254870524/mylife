@@ -546,6 +546,10 @@ class BrowserSession:
                 )
                 detail.search_coverage = strategy_used
                 details.append(detail)
+            except Cancelled:
+                # GUI 正常停止/升级重启必须由控制器按 retry 保存，不能包装成普通
+                # RuntimeError 后把当前行计入失败次数。
+                raise
             except CloudflareFailure:
                 raise
             except Exception as exc:

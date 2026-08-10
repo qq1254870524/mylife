@@ -44,9 +44,13 @@ class ControllerOfflineTests(unittest.TestCase):
             source.write_text("first_name,last_name,note\nJane,Doe,keep\n", encoding="utf-8-sig")
             output = root / "output"
             config = RunConfig(source, output, thread_count=2, browser_mode="无头")
-            controller = AppController(config)
+            progress_states: list[dict[str, int | str]] = []
+            controller = AppController(config, progress=progress_states.append)
             with patch("controller.BrowserSession", FakeBrowserSession):
                 controller.run()
+            current_run_states = [state for state in progress_states if state.get("total") == 1]
+            self.assertTrue(current_run_states)
+            self.assertTrue(any(state.get("output", "").endswith("people_MyLife结果.csv") for state in current_run_states))
             result_path = output / "people_MyLife结果.csv"
             with result_path.open("r", encoding="utf-8-sig", newline="") as handle:
                 rows = list(csv.DictReader(handle))

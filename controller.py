@@ -309,6 +309,9 @@ class AppController:
                 self.log_path,
                 lambda: list(self.worker_threads),
             )
+            # 线程刚启动就推送当前输入文件的独立汇总，不等待第一条耗时任务完成。
+            self.monitor.write_once()
+            self._emit_progress("运行中")
             self.monitor.start()
             for thread in self.worker_threads:
                 thread.join()

@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from browser_worker import BrowserSession
+from browser_worker import BrowserSession, Cancelled
 from models import PersonInput, ProfileResult, SearchResult
 
 
@@ -113,6 +113,14 @@ class BrowserStrategyTests(unittest.TestCase):
 
         self.assertEqual(session.challenge_failures, 0)
         self.assertTrue(any("已渲染有效 MyLife 页面" in line for line in logged))
+
+    def test_cancelled_detail_propagates_without_becoming_job_failure(self) -> None:
+        hit = SearchResult("https://www.mylife.com/jane-doe/e1", "Jane Doe", "42", "Denver CO 80202")
+        session, _calls = self.session([[hit]])
+        session._collect_profile = lambda *_args, **_kwargs: (_ for _ in ()).throw(Cancelled("用户已停止"))
+
+        with self.assertRaises(Cancelled):
+            session.process(self.person())
 
     def test_clean_former_name_is_used_after_primary_name_has_no_age_match(self) -> None:
         person = self.person()

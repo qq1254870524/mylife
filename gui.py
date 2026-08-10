@@ -208,12 +208,25 @@ class MainWindow:
 
         self.root.after(0, update)
 
+    def _reset_run_display(self, input_file: Path) -> None:
+        """在控制器启动前清除上一输入文件遗留的可视状态。"""
+        self.count_var.set("总数 0｜完成 0｜待处理 0｜失败 0｜CSV 0｜生日 0｜性别 0｜星座 0｜备注 0")
+        self.output_status_var.set("")
+        self.log_text.configure(state="normal")
+        self.log_text.delete("1.0", "end")
+        self.log_text.insert("end", f"已选择当前输入文件：{input_file}\n")
+        self.log_text.see("end")
+        self.log_text.configure(state="disabled")
+
     def start(self) -> None:
         try:
             config = self._config()
             if not config.input_file.is_file():
                 raise FileNotFoundError("请选择存在的输入文件")
             self._save_settings()
+            # 新文件启动时立即清空上一批的可视统计和日志；真实计数随后由当前
+            # AppController 主动推送，避免选择测试文件2后仍暂时显示测试文件1。
+            self._reset_run_display(config.input_file)
             self.controller = AppController(config, self._append_log, self._progress)
             self.controller.start_async()
             self.start_button.configure(state="disabled")
