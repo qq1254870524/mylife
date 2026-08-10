@@ -14,22 +14,20 @@ import sys
 from pathlib import Path
 
 root = Path(sys.argv[1]).resolve()
-base_commit = "24588fa8d50d2fbd5611d9a040b9c0452966ebb5"
-expected_modified_version = "1.1.1"
-expected_restored_hash = "8740E1202A509450D8164DECBB30E06C5D9E307209FE1C9D3916E8A59E52798C"
+base_commit = "9d374a5bf0bd81c00381352b7c2cb71d8da891f4"
+expected_modified_hash = "D2536C0098902A1BF2E9B97C1996B90D3DC018765E618DE3A78C153F1763A492"
+expected_restored_hash = "4449BFAF311FE7F49DE47157A83E422D8B0806F2A69C4697E818E545DF94C52A"
 preserve = {"ROLLBACK.sh", "VERIFICATION.txt", "MODIFIED_FILE", "DIFF_FILE"}
 
 if not (root / ".git").exists():
     raise SystemExit(f"ROLLBACK_ABORT missing git metadata: {root}")
-version_text = (root / "version.py").read_text(encoding="utf-8")
-if expected_modified_version not in version_text:
-    raise SystemExit("ROLLBACK_ABORT expected v1.1.1 source was not found")
+modified_hash = hashlib.sha256((root / "controller.py").read_bytes()).hexdigest().upper()
+if modified_hash != expected_modified_hash:
+    raise SystemExit(f"ROLLBACK_ABORT modified controller hash mismatch: {modified_hash}")
 
 def git_bytes(*args: str) -> bytes:
     process = subprocess.run(
-        ["git", "-C", str(root), *args],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        ["git", "-C", str(root), *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     if process.returncode:
         raise SystemExit(process.stderr.decode(errors="replace"))
@@ -56,13 +54,11 @@ for relative in changed:
     elif path.is_file() or path.is_symlink():
         path.unlink()
 
-restored_hash = hashlib.sha256((root / "version.py").read_bytes()).hexdigest().upper()
+restored_hash = hashlib.sha256((root / "controller.py").read_bytes()).hexdigest().upper()
 if restored_hash != expected_restored_hash:
-    raise SystemExit(f"ROLLBACK_ABORT restored version hash mismatch: {restored_hash}")
-if (root / "identity_matcher.py").exists() or (root / "runtime_monitor.py").exists():
-    raise SystemExit("ROLLBACK_ABORT modified-only module still exists")
+    raise SystemExit(f"ROLLBACK_ABORT restored controller hash mismatch: {restored_hash}")
 print(
     f"ROLLBACK_OK base={base_commit[:7]} files={len(changed)} "
-    f"version_sha256={restored_hash} restored_behavior=v1.0.1_launcher_and_v1.0.0_collection"
+    f"controller_sha256={restored_hash} restored_behavior=xlsx_xlsm_realtime_row_deletion"
 )
 PY
