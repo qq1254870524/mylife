@@ -238,6 +238,32 @@ class ProxyPool:
                 return geo
         return None
 
+    def wait_until_ready(
+        self,
+        spec: ProxySpec,
+        cancel: threading.Event,
+        check_interval: float = 10.0,
+    ) -> ProxyGeo | None:
+        """保持工作线程存活，循环检测/刷新当前专属代理直到恢复或收到停止指令。"""
+
+        cycle = 0
+        while not cancel.is_set():
+            cycle += 1
+            geo = self.check(spec, timeout=10)
+            if geo:
+                if cycle > 1:
+                    self.log(f"{spec.label} 已恢复，浏览器线程继续工作")
+                return geo
+            refreshed = self.refresh(spec)
+            wait_seconds = 10.0 if refreshed else check_interval
+            self.log(
+                f"{spec.label} 暂不可用，浏览器已关闭但工作线程保持；"
+                f"{wait_seconds:g} 秒后继续检测"
+            )
+            if cancel.wait(wait_seconds):
+                return None
+        return None
+
 
 def cleanup_profile_directory(path: Path) -> None:
     if path.exists():

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import tempfile
+import threading
 import time
 import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from proxy_pool import ProxyPool, load_proxy_lines_from_design, parse_proxy_line
+from proxy_pool import ProxyGeo, ProxyPool, load_proxy_lines_from_design, parse_proxy_line
 
 
 class ProxyPoolTests(unittest.TestCase):
@@ -37,6 +38,23 @@ class ProxyPoolTests(unittest.TestCase):
                 self.assertTrue(pool.refresh(spec))
                 self.assertFalse(pool.refresh(spec))
                 self.assertEqual(request.call_count, 1)
+
+    def test_wait_until_ready_keeps_retrying_instead_of_dropping_thread(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            spec = parse_proxy_line("proxy.example:1080:user:pass|https://refresh.example/change")
+            logs: list[str] = []
+            pool = ProxyPool([spec], Path(directory) / "state.json", log=logs.append)
+            recovered = ProxyGeo(public_ip="203.0.113.10")
+            with (
+                patch.object(pool, "check", side_effect=[None, None, recovered]) as check,
+                patch.object(pool, "refresh", return_value=False) as refresh,
+            ):
+                result = pool.wait_until_ready(spec, threading.Event(), check_interval=0.001)
+            self.assertIs(result, recovered)
+            self.assertEqual(check.call_count, 3)
+            self.assertEqual(refresh.call_count, 2)
+            self.assertTrue(any("线程保持" in message for message in logs))
+            self.assertTrue(any("已恢复" in message for message in logs))
 
 
 if __name__ == "__main__":

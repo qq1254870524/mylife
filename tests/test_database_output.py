@@ -145,6 +145,30 @@ class DatabaseOutputTests(unittest.TestCase):
                 self.assertEqual(list(csv.DictReader(handle)), [])
             self.assertEqual(database.summary(input_path).get("pending"), 1)
 
+    def test_failed_job_is_released_on_next_run(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            input_path = root / "input.csv"
+            input_path.write_text("name\nJane Doe\n", encoding="utf-8")
+            person = PersonInput(
+                source_path=input_path.resolve(),
+                source_row=2,
+                headers=["name"],
+                original={"name": "Jane Doe"},
+                first_value="Jane Doe",
+                first_name="Jane",
+                last_name="Doe",
+            )
+            database = JobDatabase(root / "state.sqlite3")
+            database.import_people([person])
+            job_id, _, _ = database.pending_people(input_path, 3)[0]
+            with closing(sqlite3.connect(database.path)) as connection, connection:
+                connection.execute("UPDATE jobs SET status='failed', attempts=3 WHERE id=?", (job_id,))
+            self.assertEqual(database.reset_failed_for_new_run(input_path), 1)
+            jobs = database.pending_people(input_path, 3)
+            self.assertEqual(len(jobs), 1)
+            self.assertEqual(jobs[0][2], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

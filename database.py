@@ -109,6 +109,18 @@ class JobDatabase:
             )
             connection.commit()
 
+    def reset_failed_for_new_run(self, source_path: Path) -> int:
+        """新一轮启动时释放上一轮达到上限的技术失败行。"""
+
+        with closing(self.connect()) as connection, connection:
+            cursor = connection.execute(
+                "UPDATE jobs SET status='pending', attempts=0, message='', updated_at=? "
+                "WHERE source_path=? AND status='failed'",
+                (utc_now(), str(source_path.resolve())),
+            )
+            connection.commit()
+            return int(cursor.rowcount)
+
     def reset_incomplete_birthdays(self, source_path: Path, search_revision: int) -> int:
         """搜索策略升级后仅重跑旧版空生日结果；同一版本不重复重跑。"""
 

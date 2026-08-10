@@ -160,9 +160,9 @@ class AppController:
         try:
             geo = ProxyGeo()
             if proxy_spec and proxy_pool:
-                ready = proxy_pool.ensure_ready(proxy_spec, self.stop_event)
+                ready = proxy_pool.wait_until_ready(proxy_spec, self.stop_event)
                 if not ready:
-                    self._log(f"{proxy_spec.label} 启动前检查未通过，本线程不启动浏览器")
+                    self._log(f"{proxy_spec.label} 等待恢复期间收到停止指令，本线程正常结束")
                     return
                 geo = ready
             session = BrowserSession(
@@ -227,16 +227,14 @@ class AppController:
                         # 通道故障属于代理资源故障，不消耗人员任务的业务重试次数。
                         writer.put("retry_network", job_id, message)
                         job_queue.put((job_id, person, attempts))
-                        self._log(f"线程{worker_number} 检测到代理通道错误，刷新出口后重建浏览器")
-                        refreshed_geo = proxy_pool.refresh_after_challenge(proxy_spec, self.stop_event)
+                        self._log(
+                            f"线程{worker_number} 检测到代理通道错误，关闭错误页并保持线程等待代理恢复"
+                        )
+                        session.close()
+                        refreshed_geo = proxy_pool.wait_until_ready(proxy_spec, self.stop_event)
                         if refreshed_geo and not self.stop_event.is_set():
                             session.rebuild(refreshed_geo)
-                        else:
-                            self._log(
-                                f"线程{worker_number} 当前代理通道仍不可用，停用该浏览器线程；"
-                                "任务已无损回队列，由其他线程继续"
-                            )
-                            break
+                            self._log(f"线程{worker_number} 代理恢复，已使用全新 profile 继续领取任务")
                     elif next_attempt < self.config.max_job_attempts and not self.stop_event.is_set():
                         writer.put("retry", job_id, message)
                         job_queue.put((job_id, person, next_attempt))
@@ -259,12 +257,15 @@ class AppController:
             headers, people = load_people(self.config.input_file)
             self.database.reset_interrupted()
             inserted = self.database.import_people(people)
+            failed_requeued = self.database.reset_failed_for_new_run(self.config.input_file)
             requeued = self.database.reset_incomplete_birthdays(self.config.input_file, SEARCH_REVISION)
             jobs = self.database.pending_people(self.config.input_file, self.config.max_job_attempts)
             self._total = len(people)
             self._log(f"导入识别 {len(people)} 行，新增数据库任务 {inserted} 条，待处理 {len(jobs)} 条")
             if requeued:
                 self._log(f"搜索策略升级：重试 {requeued} 条旧版空生日结果，并从 SQLite 重建实时 CSV")
+            if failed_requeued:
+                self._log(f"新一轮启动：重新排队 {failed_requeued} 条上一轮技术失败行")
             csv_writer = RealtimeCsvWriter(
                 self.config.output_dir,
                 self.config.input_file,
