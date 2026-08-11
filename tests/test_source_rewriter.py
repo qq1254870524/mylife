@@ -43,7 +43,7 @@ class SourceRewriterTests(unittest.TestCase):
             self.assertEqual(rows, [("name", "note"), ("John Doe", "b")])
             self.assertEqual(other_rows, [("name", "note"), ("Other Person", "must stay")])
 
-    def test_realtime_csv_matches_full_row_and_removes_duplicate_one_at_a_time(self) -> None:
+    def test_realtime_csv_matches_full_row_and_removes_all_exact_duplicates(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "input.csv"
             path.write_text(
@@ -52,14 +52,14 @@ class SourceRewriterTests(unittest.TestCase):
             )
             _headers, people = load_people(path)
             rewriter = RealtimeInputRewriter(path)
-            self.assertEqual(rewriter.remove_person(people[0]), 1)
-            with path.open("r", encoding="utf-8-sig", newline="") as handle:
-                rows = list(csv.reader(handle))
-            self.assertEqual(rows, [["name", "note"], ["Jane Doe", "b"], ["Jane Doe", "a"]])
-            self.assertEqual(rewriter.remove_person(people[2]), 1)
+            self.assertEqual(rewriter.remove_person(people[0]), 2)
             with path.open("r", encoding="utf-8-sig", newline="") as handle:
                 rows = list(csv.reader(handle))
             self.assertEqual(rows, [["name", "note"], ["Jane Doe", "b"]])
+            self.assertEqual(rewriter.remove_person(people[1]), 1)
+            with path.open("r", encoding="utf-8-sig", newline="") as handle:
+                rows = list(csv.reader(handle))
+            self.assertEqual(rows, [["name", "note"]])
 
     def test_realtime_xlsx_matches_original_and_preserves_other_sheet(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

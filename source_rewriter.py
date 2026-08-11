@@ -9,6 +9,7 @@ from typing import Iterable, Mapping
 
 from input_loader import _encoding, load_people
 from models import PersonInput
+from row_identity import FullRowKey, full_row_key
 
 
 def _rewrite_csv(path: Path, completed_rows: set[int]) -> int:
@@ -129,18 +130,12 @@ def remove_completed_rows(path: str | Path, completed_source_rows: set[int]) -> 
     raise ValueError(f"不支持重建的文件类型：{suffix}")
 
 
-def _original_key(original: Mapping[str, object]) -> tuple[tuple[str, str], ...]:
-    """与 input_loader 相同地按去首尾空白后的完整原始行匹配。"""
-
-    return tuple(sorted((str(key), str(value or "").strip()) for key, value in original.items()))
-
-
 class RealtimeInputRewriter:
     """在明确结果持久化后，从当前输入中原子删除对应的一条完整记录。
 
     数据库保留最初导入的 PersonInput；文件删行后行号会变化，因此实时阶段不能再用
-    最初的 source_row。这里每次按完整原始行重新定位当前行号，合法重复行也只按完成
-    数量逐条删除。
+    最初的 source_row。这里每次按完整原始行重新定位当前行号；首列相同但其他字段
+    不同的记录保持独立，整行完全相同的副本随已完成的唯一任务一起删除。
     """
 
     def __init__(self, path: str | Path) -> None:
@@ -154,23 +149,17 @@ class RealtimeInputRewriter:
         return self.remove_originals(person.original for person in people)
 
     def remove_originals(self, originals: Iterable[Mapping[str, object]]) -> int:
-        wanted: dict[tuple[tuple[str, str], ...], int] = {}
-        for original in originals:
-            key = _original_key(original)
-            wanted[key] = wanted.get(key, 0) + 1
+        wanted: set[FullRowKey] = {full_row_key(original) for original in originals}
         if not wanted:
             return 0
 
         with self._lock:
-            _headers, current_people = load_people(self.path)
-            current_rows: set[int] = set()
-            for current in current_people:
-                key = _original_key(current.original)
-                remaining = wanted.get(key, 0)
-                if remaining <= 0:
-                    continue
-                current_rows.add(current.source_row)
-                wanted[key] = remaining - 1
+            _headers, current_people = load_people(self.path, deduplicate=False)
+            current_rows = {
+                current.source_row
+                for current in current_people
+                if full_row_key(current.original) in wanted
+            }
             if not current_rows:
                 return 0
 

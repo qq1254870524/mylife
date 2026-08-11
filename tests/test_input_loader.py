@@ -11,6 +11,24 @@ from input_loader import load_people
 
 
 class InputLoaderTests(unittest.TestCase):
+    def test_only_full_row_duplicates_are_deduplicated(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "same_first.csv"
+            path.write_text(
+                "query,full_name,note\n"
+                "SAME,Jane Doe,资料A\n"
+                "SAME,Jane Doe,资料B\n"
+                "SAME,Jane Doe,资料A\n",
+                encoding="utf-8-sig",
+            )
+            _headers, people = load_people(path)
+            self.assertEqual(len(people), 2)
+            self.assertEqual([person.original["note"] for person in people], ["资料A", "资料B"])
+            self.assertEqual([person.source_row for person in people], [2, 3])
+
+            _headers, physical_rows = load_people(path, deduplicate=False)
+            self.assertEqual(len(physical_rows), 3)
+
     def test_csv_arbitrary_order_and_extra_columns(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "people.csv"

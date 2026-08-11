@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable
 
 from models import PersonInput
+from row_identity import FullRowKey, full_row_key
 
 
 ALIASES: dict[str, tuple[str, ...]] = {
@@ -152,18 +153,29 @@ def _normalize_age(value: str) -> str:
     return str(age) if 0 < age < 125 else ""
 
 
-def load_people(path: str | Path) -> tuple[list[str], list[PersonInput]]:
+def load_people(
+    path: str | Path,
+    *,
+    deduplicate: bool = True,
+) -> tuple[list[str], list[PersonInput]]:
+    """读取输入；默认只合并整行全部字段完全相同的记录。"""
+
     source = Path(path).resolve()
     headers, raw_rows = read_rows(source)
     first_header = headers[0]
     mapped = {logical: _find_header(headers, logical) for logical in ALIASES}
     people: list[PersonInput] = []
+    seen_full_rows: set[FullRowKey] = set()
     for source_row, raw in enumerate(raw_rows, 2):
         values = ["" if value is None else str(value).strip() for value in raw]
         values.extend([""] * max(0, len(headers) - len(values)))
         row = dict(zip(headers, values))
         if not any(row.values()):
             continue
+        row_key = full_row_key(row, headers)
+        if deduplicate and row_key in seen_full_rows:
+            continue
+        seen_full_rows.add(row_key)
         first_value = row.get(first_header, "").strip()
         first_name = _value(row, mapped["first_name"])
         middle_name = _value(row, mapped["middle_name"])
