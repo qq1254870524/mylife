@@ -24,6 +24,29 @@ ALIASES: dict[str, tuple[str, ...]] = {
     "query": ("query", "search", "keyword", "关键词", "查询", "搜索资料"),
 }
 
+HEADERLESS_PERSON_HEADERS = (
+    "primary_phone",
+    "ssn",
+    "known_birthday",
+    "full_name",
+    "age",
+    "current_address",
+    "city",
+    "state",
+    "zip_code",
+    "email",
+    "phone",
+    "birth_year",
+    "reference_age",
+)
+
+
+@dataclass(slots=True)
+class InputTable:
+    headers: list[str]
+    rows: list[list[object]]
+    first_source_row: int = 2
+
 
 def _key(value: object) -> str:
     return re.sub(r"[\s_\-]+", "", str(value or "").strip().lower())
@@ -43,6 +66,27 @@ def _unique_headers(values: Iterable[object]) -> list[str]:
         used[base] = count
         result.append(base if count == 1 else f"{base}_{count}")
     return result
+
+
+def _looks_like_headerless_person_row(values: Iterable[object]) -> bool:
+    """识别“电话/SSN/生日/姓名/年龄/地址/城市/州/邮编…”无表头人员表。"""
+
+    row = [str(value or "").strip() for value in values]
+    if len(row) < 9:
+        return False
+    phone = re.sub(r"\D", "", row[0])
+    ssn = bool(re.fullmatch(r"\d{3}-\d{2}-\d{4}", row[1]))
+    name_parts = re.findall(r"[A-Za-z][A-Za-z'.-]*", row[3])
+    age = _normalize_age(row[4])
+    state = bool(re.fullmatch(r"[A-Za-z]{2}", row[7]))
+    zip_code = bool(re.fullmatch(r"\d{4,5}(?:\.0+)?", row[8]))
+    return len(phone) == 10 and ssn and len(name_parts) >= 2 and bool(age) and state and zip_code
+
+
+def _headerless_person_headers(width: int) -> list[str]:
+    headers = list(HEADERLESS_PERSON_HEADERS[:width])
+    headers.extend(f"column_{index}" for index in range(len(headers) + 1, width + 1))
+    return headers
 
 
 def _encoding(raw: bytes) -> str:
@@ -87,7 +131,7 @@ def _read_txt(path: Path) -> tuple[list[str], list[list[object]]]:
     return ["query"], [[line] for line in lines]
 
 
-def _read_xlsx(path: Path) -> tuple[list[str], list[list[object]]]:
+def _read_xlsx_table(path: Path) -> InputTable:
     import openpyxl
 
     workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
@@ -96,22 +140,37 @@ def _read_xlsx(path: Path) -> tuple[list[str], list[list[object]]]:
         iterator = sheet.iter_rows(values_only=True)
         first = next(iterator, None)
         if first is None:
-            return ["query"], []
-        return _unique_headers(first), [list(row) for row in iterator]
+            return InputTable(["query"], [])
+        if _looks_like_headerless_person_row(first):
+            rows = [list(first), *[list(row) for row in iterator]]
+            return InputTable(_headerless_person_headers(len(first)), rows, first_source_row=1)
+        return InputTable(_unique_headers(first), [list(row) for row in iterator])
     finally:
         workbook.close()
 
 
-def read_rows(path: str | Path) -> tuple[list[str], list[list[object]]]:
+def _read_xlsx(path: Path) -> tuple[list[str], list[list[object]]]:
+    table = _read_xlsx_table(path)
+    return table.headers, table.rows
+
+
+def read_input_table(path: str | Path) -> InputTable:
     source = Path(path).resolve()
     suffix = source.suffix.lower()
     if suffix in {".xlsx", ".xlsm"}:
-        return _read_xlsx(source)
+        return _read_xlsx_table(source)
     if suffix == ".csv":
-        return _read_delimited(source)
+        headers, rows = _read_delimited(source)
+        return InputTable(headers, rows)
     if suffix == ".txt":
-        return _read_txt(source)
+        headers, rows = _read_txt(source)
+        return InputTable(headers, rows)
     raise ValueError(f"不支持的输入文件类型：{suffix or '无扩展名'}")
+
+
+def read_rows(path: str | Path) -> tuple[list[str], list[list[object]]]:
+    table = read_input_table(path)
+    return table.headers, table.rows
 
 
 def _value(row: dict[str, str], header: str | None) -> str:
@@ -153,6 +212,16 @@ def _normalize_age(value: str) -> str:
     return str(age) if 0 < age < 125 else ""
 
 
+def _normalize_zip(value: str) -> str:
+    clean = str(value or "").strip()
+    if re.fullmatch(r"\d{4}", clean):
+        return clean.zfill(5)
+    match = re.fullmatch(r"(\d{4,5})\.0+", clean)
+    if match:
+        return match.group(1).zfill(5)
+    return clean
+
+
 def load_people(
     path: str | Path,
     *,
@@ -161,12 +230,13 @@ def load_people(
     """读取输入；默认只合并整行全部字段完全相同的记录。"""
 
     source = Path(path).resolve()
-    headers, raw_rows = read_rows(source)
+    table = read_input_table(source)
+    headers, raw_rows = table.headers, table.rows
     first_header = headers[0]
     mapped = {logical: _find_header(headers, logical) for logical in ALIASES}
     people: list[PersonInput] = []
     seen_full_rows: set[FullRowKey] = set()
-    for source_row, raw in enumerate(raw_rows, 2):
+    for source_row, raw in enumerate(raw_rows, table.first_source_row):
         values = ["" if value is None else str(value).strip() for value in raw]
         values.extend([""] * max(0, len(headers) - len(values)))
         row = dict(zip(headers, values))
@@ -181,7 +251,7 @@ def load_people(
         middle_name = _value(row, mapped["middle_name"])
         last_name = _value(row, mapped["last_name"])
         full_name = _value(row, mapped["full_name"])
-        query = _value(row, mapped["query"]) or first_value
+        query = _value(row, mapped["query"]) or full_name or first_value
         if not first_name or not last_name:
             guessed = _parse_name(full_name or query)
             first_name = first_name or guessed[0]
@@ -189,7 +259,7 @@ def load_people(
             last_name = last_name or guessed[2]
         city = _value(row, mapped["city"])
         state = _value(row, mapped["state"]).upper()
-        zip_code = _value(row, mapped["zip_code"])
+        zip_code = _normalize_zip(_value(row, mapped["zip_code"]))
         age = _normalize_age(_value(row, mapped["age"]))
         location = _value(row, mapped["location"])
         current_address = _value(row, mapped["current_address"])

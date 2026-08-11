@@ -11,6 +11,61 @@ from input_loader import load_people
 
 
 class InputLoaderTests(unittest.TestCase):
+    def test_headerless_people_xlsx_is_inferred_and_keeps_first_physical_row(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "headerless.xlsx"
+            workbook = openpyxl.Workbook()
+            sheet = workbook.active
+            sheet.append(
+                [
+                    "3035550100",
+                    "111-22-3333",
+                    "1984-06-12",
+                    "Jane Doe",
+                    "42",
+                    "1450 Pearl St",
+                    "Denver",
+                    "CO",
+                    80202,
+                    "jane@example.com",
+                    "(303) 555-0100",
+                    1984,
+                    42,
+                ]
+            )
+            sheet.append(
+                [
+                    "2145550199",
+                    "222-33-4444",
+                    "1975-01-02",
+                    "John Smith",
+                    "51",
+                    "200 Main St",
+                    "Dallas",
+                    "TX",
+                    7501,
+                    "john@example.com",
+                    "(214) 555-0199",
+                    1975,
+                    51,
+                ]
+            )
+            workbook.save(path)
+            workbook.close()
+
+            headers, people = load_people(path)
+            self.assertEqual(headers[:9], [
+                "primary_phone", "ssn", "known_birthday", "full_name", "age",
+                "current_address", "city", "state", "zip_code",
+            ])
+            self.assertEqual(len(people), 2)
+            self.assertEqual(people[0].source_row, 1)
+            self.assertEqual(people[0].full_name, "Jane Doe")
+            self.assertEqual(people[0].location, "Denver, CO 80202")
+            self.assertEqual(people[0].age, "42")
+            self.assertFalse(people[0].validation_error)
+            self.assertEqual(people[1].zip_code, "07501")
+
     def test_only_full_row_duplicates_are_deduplicated(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "same_first.csv"

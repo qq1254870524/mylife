@@ -66,6 +66,20 @@ class BrowserStrategyTests(unittest.TestCase):
         self.assertEqual(selected.profile_url, hit.profile_url)
         self.assertIn("唯一结果直接确认", selected.query_strategy)
 
+    def test_no_search_result_keeps_reason_and_uses_complete_input_birthday(self) -> None:
+        person = self.person()
+        person.original = {"birthday": "1954-04-03"}
+        session, calls = self.session([[], []])
+
+        selected = session.process(person)[0]
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(selected.status, "无结果")
+        self.assertIn("均无可采集结果", selected.message)
+        self.assertEqual(selected.birthday, "04/03/1954")
+        self.assertEqual(selected.zodiac, "Aries (March 21 - April 19)")
+        self.assertIn("输入资料完整日期", selected.demographics_note)
+
     def test_single_location_result_is_confirmed_even_when_age_differs(self) -> None:
         wrong_age = SearchResult("https://www.mylife.com/jane-doe/e1", "Jane Doe", "71", "Denver CO 80202")
         session, calls = self.session([[wrong_age]])
@@ -167,6 +181,25 @@ class BrowserStrategyTests(unittest.TestCase):
         session._return_to_search_list(search_url)
         self.assertEqual(navigated, [search_url])
         self.assertTrue(any("固定 GET" in line for line in logged))
+
+    def test_return_to_list_stop_does_not_capture_diagnostic(self) -> None:
+        session = object.__new__(BrowserSession)
+        session.worker_number = 2
+        session.page = SimpleNamespace(url="https://www.mylife.com/jane-doe/e1")
+        session._close_visible_overlay = lambda: True
+        session._navigate = lambda _url: (_ for _ in ()).throw(Cancelled("用户已停止"))
+        session._cancelled = lambda: True
+        diagnostics: list[str] = []
+        logged: list[str] = []
+        session.capture_diagnostic = diagnostics.append
+        session.log = logged.append
+
+        session._return_to_search_list(
+            "https://www.mylife.com/pub-multisearch.pubview?searchFirstName=Jane"
+        )
+
+        self.assertEqual(diagnostics, [])
+        self.assertTrue(any("略过返回列表诊断截图" in line for line in logged))
 
 
 if __name__ == "__main__":

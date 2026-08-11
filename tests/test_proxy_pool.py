@@ -7,10 +7,38 @@ import unittest
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from proxy_pool import ProxyGeo, ProxyPool, load_proxy_lines_from_design, parse_proxy_line
+from proxy_pool import (
+    ProxyGeo,
+    ProxyPool,
+    cleanup_profile_directory,
+    load_proxy_lines_from_design,
+    parse_proxy_line,
+)
 
 
 class ProxyPoolTests(unittest.TestCase):
+    def test_cleanup_profile_retries_after_restoring_windows_acl(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            profile = Path(directory) / "profile"
+            profile.mkdir()
+            with (
+                patch("proxy_pool.os.name", "nt"),
+                patch.dict(
+                    "proxy_pool.os.environ",
+                    {"USERDOMAIN": "DOMAIN", "USERNAME": "tester"},
+                    clear=False,
+                ),
+                patch("proxy_pool.shutil.rmtree") as remove,
+                patch("proxy_pool.subprocess.run") as grant,
+            ):
+                cleanup_profile_directory(profile)
+
+            self.assertEqual(remove.call_count, 2)
+            grant.assert_called_once()
+            command = grant.call_args.args[0]
+            self.assertEqual(command[0], "icacls.exe")
+            self.assertIn("DOMAIN\\tester:(OI)(CI)F", command)
+
     def test_parse_combined_proxy_line(self) -> None:
         spec = parse_proxy_line("proxy.example:1080:user:pass|https://refresh.example/change", 3)
         self.assertEqual(spec.label, "代理3")

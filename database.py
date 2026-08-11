@@ -130,10 +130,23 @@ class JobDatabase:
     def reset_interrupted(self) -> None:
         with closing(self.connect()) as connection, connection:
             connection.execute(
-                "UPDATE jobs SET status='pending', updated_at=? WHERE status='running'",
+                "UPDATE jobs SET status='pending', attempts=MAX(attempts-1, 0), updated_at=? "
+                "WHERE status='running'",
                 (utc_now(),),
             )
             connection.commit()
+
+    def reset_exhausted_incomplete_for_new_run(self, source_path: Path, max_attempts: int) -> int:
+        """修复旧停止流程留下的 pending/retry 且 attempts 已到上限的不可领取任务。"""
+
+        with closing(self.connect()) as connection, connection:
+            cursor = connection.execute(
+                "UPDATE jobs SET attempts=0, message='', updated_at=? "
+                "WHERE source_path=? AND status IN ('pending','retry') AND attempts>=?",
+                (utc_now(), str(source_path.resolve()), int(max_attempts)),
+            )
+            connection.commit()
+            return int(cursor.rowcount)
 
     def reset_failed_for_new_run(self, source_path: Path) -> int:
         """新一轮启动时释放上一轮达到上限的技术失败行。"""
@@ -364,6 +377,16 @@ class DatabaseWriter(threading.Thread):
                 (str(message), now, int(job_id)),
             )
         elif event == "retry_network":
+            job_id, message = payload
+            connection.execute(
+                """
+                UPDATE jobs
+                SET status='retry', attempts=MAX(attempts-1, 0), message=?, updated_at=?
+                WHERE id=?
+                """,
+                (str(message), now, int(job_id)),
+            )
+        elif event == "retry_cancelled":
             job_id, message = payload
             connection.execute(
                 """

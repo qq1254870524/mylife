@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 from typing import Iterable, Mapping
 
-from input_loader import _encoding, load_people
+from input_loader import _encoding, load_people, read_input_table
 from models import PersonInput
 from row_identity import FullRowKey, full_row_key
 
@@ -99,7 +99,7 @@ def _rewrite_xlsx(path: Path, completed_rows: set[int]) -> int:
     try:
         sheet = workbook.active
         delete_rows = sorted(
-            (row_index for row_index in completed_rows if 2 <= row_index <= sheet.max_row),
+            (row_index for row_index in completed_rows if 1 <= row_index <= sheet.max_row),
             reverse=True,
         )
         for row_index in delete_rows:
@@ -117,12 +117,18 @@ def remove_completed_rows(path: str | Path, completed_source_rows: set[int]) -> 
     """仅在整批结束后按原始源行号重建，重复首列值不会误删未完成行。"""
 
     source = Path(path).resolve()
+    suffix = source.suffix.lower()
+    if suffix in {".xlsx", ".xlsm"}:
+        first_source_row = read_input_table(source).first_source_row
+        completed_rows = {
+            int(value) for value in completed_source_rows if int(value) >= first_source_row
+        }
+        if not completed_rows:
+            return 0
+        return _rewrite_xlsx(source, completed_rows)
     completed_rows = {int(value) for value in completed_source_rows if int(value) >= 2}
     if not completed_rows:
         return 0
-    suffix = source.suffix.lower()
-    if suffix in {".xlsx", ".xlsm"}:
-        return _rewrite_xlsx(source, completed_rows)
     if suffix == ".csv":
         return _rewrite_csv(source, completed_rows)
     if suffix == ".txt":

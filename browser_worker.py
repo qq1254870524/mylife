@@ -436,6 +436,9 @@ class BrowserSession:
             except Exception as exc:
                 # 详情数据已经取得，返回列表失败不应把完整候选误判为采集失败；下一候选仍可直达 URL。
                 self.log(f"线程{self.worker_number} 固定 GET 搜索列表返回失败，保留已采集详情：{type(exc).__name__}: {exc}")
+                if self._cancelled() or isinstance(exc, Cancelled):
+                    self.log(f"线程{self.worker_number} 停止期间略过返回列表诊断截图")
+                    return
                 self.capture_diagnostic("return-search-failure")
         if "pub-multisearch.pubview" in str(self.page.url or ""):
             self.log(f"线程{self.worker_number} 已通过固定 GET 搜索地址返回列表页面")
@@ -518,18 +521,17 @@ class BrowserSession:
 
         strategy_used = "→".join(strategies_used) or "未执行搜索"
         if not search_results:
-            return [
-                ProfileResult(
-                    result_index=0,
-                    profile_url="",
-                    full_name=person.full_name,
-                    location=person.location,
-                    query_strategy=strategy_used,
-                    search_coverage=strategy_used,
-                    status="无结果",
-                    message=f"已执行 {len(strategies_used)} 种搜索，均无可采集结果",
-                )
-            ]
+            result = ProfileResult(
+                result_index=0,
+                profile_url="",
+                full_name=person.full_name,
+                location=person.location,
+                query_strategy=strategy_used,
+                search_coverage=strategy_used,
+                status="无结果",
+                message=f"已执行 {len(strategies_used)} 种搜索，均无可采集结果",
+            )
+            return [enrich_demographics(person, result, [result])]
         self.log(
             f"线程{self.worker_number} 开始采集全部候选详情：候选={len(search_results)}，输入年龄={person.age or '空'}"
         )

@@ -28,6 +28,18 @@ STREET_RE = re.compile(
     r"Circle|Cir|Way|Parkway|Pkwy|Place|Pl|Terrace|Ter|Trail|Trl)\b",
     re.I,
 )
+INPUT_BIRTHDAY_KEYS = {
+    "birthday",
+    "birthdate",
+    "birth_date",
+    "date_of_birth",
+    "dateofbirth",
+    "dob",
+    "known_birthday",
+    "knownbirthday",
+    "生日",
+    "出生日期",
+}
 
 
 def _birthday_date(value: str) -> datetime | None:
@@ -38,6 +50,17 @@ def _birthday_date(value: str) -> datetime | None:
         except ValueError:
             continue
     return None
+
+
+def _input_birthday(person: PersonInput) -> str:
+    for key, value in person.original.items():
+        normalized = re.sub(r"[^a-z0-9_\u4e00-\u9fff]", "", str(key or "").strip().lower())
+        if normalized not in INPUT_BIRTHDAY_KEYS:
+            continue
+        born = _birthday_date(str(value or ""))
+        if born:
+            return born.strftime("%m/%d/%Y")
+    return ""
 
 
 def zodiac_from_birthday(value: str) -> str:
@@ -91,9 +114,8 @@ def enrich_demographics(
     selected: ProfileResult,
     details: list[ProfileResult],
 ) -> ProfileResult:
-    """只从严格同身份重复档案补字段；星座可由完整生日确定性计算。"""
+    """从严格同身份档案或输入完整日期补字段；星座由完整生日确定性计算。"""
 
-    del person  # 预留给后续来源一致性规则；当前不根据姓名猜性别或生日。
     filled: list[str] = []
     for donor in details:
         if donor is selected or not _same_identity_duplicate(selected, donor):
@@ -107,6 +129,13 @@ def enrich_demographics(
         if not selected.zodiac and donor.zodiac:
             selected.zodiac = donor.zodiac
             filled.append("星座(同身份重复档案)")
+    if not selected.birthday:
+        input_birthday = _input_birthday(person)
+        if input_birthday:
+            selected.birthday = input_birthday
+            filled.append("生日(输入资料完整日期)")
+            if "生日未公开" in selected.status:
+                selected.status = selected.status.replace("身份但生日未公开", "生日（输入资料补充）")
     if selected.birthday and not selected.zodiac:
         selected.zodiac = zodiac_from_birthday(selected.birthday)
         if selected.zodiac:

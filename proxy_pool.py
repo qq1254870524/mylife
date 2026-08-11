@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import threading
 import time
 from dataclasses import dataclass
@@ -268,3 +269,32 @@ class ProxyPool:
 def cleanup_profile_directory(path: Path) -> None:
     if path.exists():
         shutil.rmtree(path, ignore_errors=True)
+    if not path.exists() or os.name != "nt":
+        return
+
+    # Chromium 会给少数空缓存目录写入仅 AppContainer 可修改的 ACL，普通
+    # shutil.rmtree(ignore_errors=True) 会静默留下这些目录。停止后浏览器已经退出，
+    # 此时把当前登录用户权限递归恢复后再删一次，确保下次一定使用全新 profile。
+    domain = os.environ.get("USERDOMAIN", "").strip()
+    username = os.environ.get("USERNAME", "").strip()
+    account = f"{domain}\\{username}" if domain and username else username
+    if account:
+        try:
+            subprocess.run(
+                [
+                    "icacls.exe",
+                    str(path),
+                    "/grant",
+                    f"{account}:(OI)(CI)F",
+                    "/T",
+                    "/C",
+                    "/Q",
+                ],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=30,
+            )
+        except (OSError, subprocess.SubprocessError):
+            pass
+    shutil.rmtree(path, ignore_errors=True)

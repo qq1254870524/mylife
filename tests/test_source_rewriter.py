@@ -12,6 +12,38 @@ from source_rewriter import RealtimeInputRewriter, remove_completed_rows
 
 
 class SourceRewriterTests(unittest.TestCase):
+    def test_headerless_xlsx_can_delete_first_physical_data_row(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "headerless.xlsx"
+            workbook = openpyxl.Workbook()
+            sheet = workbook.active
+            sheet.append([
+                "3035550100", "111-22-3333", "1984-06-12", "Jane Doe", "42",
+                "1450 Pearl St", "Denver", "CO", 80202, "jane@example.com",
+                "(303) 555-0100", 1984, 42,
+            ])
+            sheet.append([
+                "2145550199", "222-33-4444", "1975-01-02", "John Smith", "51",
+                "200 Main St", "Dallas", "TX", 75201, "john@example.com",
+                "(214) 555-0199", 1975, 51,
+            ])
+            workbook.save(path)
+            workbook.close()
+
+            _headers, people = load_people(path)
+            self.assertEqual([person.source_row for person in people], [1, 2])
+            self.assertEqual(RealtimeInputRewriter(path).remove_person(people[0]), 1)
+
+            workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+            rows = list(workbook.active.iter_rows(values_only=True))
+            workbook.close()
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0][3], "John Smith")
+            _headers, remaining = load_people(path)
+            self.assertEqual(len(remaining), 1)
+            self.assertEqual(remaining[0].source_row, 1)
+            self.assertEqual(remaining[0].full_name, "John Smith")
+
     def test_csv_is_rebuilt_by_source_row_not_duplicate_first_value(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "input.csv"

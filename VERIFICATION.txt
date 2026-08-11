@@ -1,65 +1,49 @@
-MyLife v1.1.3 full-row dedup verification
-Date: 2026-08-11
-Branch: main
-Changed field: input full-row deduplication / full_row_key
-Original commit: b462072d4a37f362722f2660f51d80d389c63f40
+CHANGED_BRANCH_FIELD=v1.1.4/runtime-resilience-headerless-xlsx-demographic-completeness-worker-persistence-terminal-counters
+VERIFIED_AT=2026-08-12 07:45 Asia/Shanghai
+BASELINE_COMMIT=a171f150ebf9e9a6684538c992f98811fc8d4f45
 
-Artifacts:
+ARTIFACT_PATHS:
 MODIFIED_FILE=E:\mylife\MODIFIED_FILE
 DIFF_FILE=E:\mylife\DIFF_FILE
-VERIFICATION.txt=E:\mylife\VERIFICATION.txt
-ROLLBACK.sh=E:\mylife\ROLLBACK.sh
+VERIFICATION=E:\mylife\VERIFICATION.txt
+ROLLBACK=E:\mylife\ROLLBACK.sh
 
-BASELINE
-Command: C:\Python312\python.exe -B -m unittest tests.test_input_loader tests.test_source_rewriter -v
-Input: C:\Users\zhang\Desktop\codex_tmp\mylife_fullrow_dedupe_20260811_0812 (original commit clone)
-Literal result: Ran 10 tests in 0.186s / OK
-Exit status: 0
-Full command: C:\Python312\python.exe -B -m unittest discover -s tests -v
-Full literal result: Ran 73 tests in 3.164s / OK
-Full exit status: 0
-Restored behavior/status: v1.1.2 loads same-first rows independently and removes completed rows by full-row match; exact full-row copies remain separate physical tasks.
+BASELINE:
+COMMAND=C:\Python312\python.exe -B -m unittest discover -s tests -v
+INPUT=C:\Users\zhang\Desktop\codex_tmp\mylife_v114_final_rollback_20260812_0745 after ROLLBACK.sh restored commit a171f150ebf9e9a6684538c992f98811fc8d4f45
+LITERAL_OUTPUT=Ran 74 tests in 3.136s
+OK
+EXIT_STATUS=0
+BEHAVIOR_STATUS=v1.1.3 baseline restored; VERSION=1.1.3; RELEASE_NOTES_v1.1.4.md absent; git status clean
 
-MODIFIED
-Command: C:\Python312\python.exe -B -m unittest tests.test_input_loader tests.test_source_rewriter -v
-Input: C:\Users\zhang\Desktop\codex_tmp\mylife_fullrow_dedupe_20260811_0820 (modified copy)
-Literal result: Ran 11 tests in 0.182s / OK
-Exit status: 0
-Full command: C:\Python312\python.exe -B -m unittest discover -s tests -v
-Full literal result: Ran 74 tests in 3.174s / OK
-Full exit status: 0
-Real input command: C:\Python312\python.exe -B - [load_people/count audit of E:\mylife\手机号.xlsx before restart]
-Real input literal result: unique_tasks 6900; physical_rows 6900; first_duplicate_groups 1766; first_duplicate_extra_rows 3862; full_duplicate_groups 0; full_duplicate_extra_rows 0
-Real input exit status: 0
-Changed behavior/status: every distinct full row remains a task even when the first column repeats; only exact full-row copies collapse to the first source row.
+MODIFIED:
+COMMAND=C:\Python312\python.exe -B -m unittest discover -s tests
+INPUT=E:\mylife v1.1.4 formal modified source
+LITERAL_OUTPUT=Ran 84 tests in 7.429s
+OK
+EXIT_STATUS=0
+BEHAVIOR_STATUS=headerless XLSX, network/stop retry, worker persistence, input birthday fallback, terminal cleanup/counters all pass
 
-FORMAL MODIFIED
-Command: C:\Python312\python.exe -B -m unittest tests.test_input_loader tests.test_source_rewriter -v
-Input: E:\mylife (deployed formal source)
-Literal result: Ran 11 tests in 0.141s / OK
-Exit status: 0
-Full command: C:\Python312\python.exe -B -m unittest discover -s tests -v
-Full literal result: Ran 74 tests in 3.219s / OK
-Full exit status: 0
-Remaining-input command: C:\Python312\python.exe -B - [load_people/count audit of E:\mylife\手机号.xlsx after graceful stop]
-Remaining-input literal result: unique_tasks 6872; physical_rows 6872; first_duplicate_extra_rows 3851; full_duplicate_extra_rows 0
-Remaining-input exit status: 0
+ROLLBACK:
+COMMAND=& "C:\Program Files\Git\bin\bash.exe" "C:\Users\zhang\Desktop\codex_tmp\mylife_v114_final_rollback_20260812_0745\ROLLBACK.sh" "C:\Users\zhang\Desktop\codex_tmp\mylife_v114_final_rollback_20260812_0745"
+INPUT=independent copy containing the complete v1.1.4 modified branch and executable ROLLBACK.sh
+LITERAL_OUTPUT=Ran 74 tests in 3.136s
+OK
+ROLLBACK_RESULT=restored_v1.1.3_behavior
+ROLLBACK_EXIT=0
+VERSION=1.1.3
+RELEASE_NOTES_PRESENT=False
+EXIT_STATUS=0
+RESTORED_BEHAVIOR_STATUS=all changed tracked files including database.py restored from a171f150; v1.1.3 tests pass; worktree clean
 
-ROLLBACK
-Modified-copy command: C:\Python312\python.exe -B -m unittest tests.test_input_loader tests.test_source_rewriter -v
-Modified-copy input: C:\Users\zhang\Desktop\codex_tmp\mylife_fullrow_dedupe_rollback_20260811_0823 after copying the v1.1.3 files
-Modified-copy literal result: Ran 11 tests in 0.157s / OK
-Modified-copy exit status: 0
-Rollback command: "C:\Program Files\Git\bin\bash.exe" C:\Users\zhang\Desktop\codex_tmp\mylife_fullrow_dedupe_rollback_20260811_0823\ROLLBACK.sh C:\Users\zhang\Desktop\codex_tmp\mylife_fullrow_dedupe_rollback_20260811_0823
-Rollback input: C:\Users\zhang\Desktop\codex_tmp\mylife_fullrow_dedupe_rollback_20260811_0823
-Rollback literal result: Ran 10 tests in 0.090s / OK; ROLLBACK_RESULT=restored_v1.1.2_full_row_matching_behavior
-Rollback exit status: 0
-Restored behavior/status: repository returned clean at original commit behavior and the original 10 targeted tests passed.
-
-Runtime continuity before deployment:
-GUI stop result: PID 16224 exited normally; all four worker threads joined; XLSX was rebuilt once and 28 completed rows were deleted.
-Input state after stop: 6872 data rows remain; SQLite checkpoint and 28 CSV results remain for resume.
-
-Safeguards:
-E:\mylife\设计思路.txt SHA256 remains 8C4E05788C67189313709DE5C533FCE342662F13524A0EC9DBA5D6D55EF36F09.
-E:\truepeoplesearch and E:\txfgsales were not modified.
+LIVE_RUN:
+CONFIG=4 browser threads; proxy pool enabled; small-window browsers; input E:\mylife\存资料处\需要查生日.xlsx; output E:\mylife\存资料处
+THREAD_PERSISTENCE=health.json kept alive=4 while only 3 and then 2 jobs remained; no worker disappeared; all requeued work was reclaimed
+NETWORK_RESULT=transient processing errors=7; ERR_SOCKS_CONNECTION_FAILED occurrences=10; ERR_SSL_PROTOCOL_ERROR occurrences=2; terminal failures=0; all transient errors recovered
+INPUT_RESULT=original physical data rows=96; final physical data rows=0; workbook exists and contains no data rows
+OUTPUT_RESULT=CSV rows=96; birthdays=94; genders=92; zodiacs=94; remarks=96; full-output duplicates=0
+MISSING_FIELD_AUDIT=birthday blank=2 because source/search supplied no unique public date; gender blank=4 because source/MyLife supplied no published gender; every row has 备注原因
+OUTPUT_SHA256=B172CCB3299BD9C24769B6AE51A7615AD0F1AFC8308252E9A3496266A30162E5
+INPUT_FINAL_SHA256=E6F37BA08C8F449DFE7883F315406A759F4F302D87546CEFFAB04B4951494A9A
+CLEAN_RESULT=.mylife_runtime and profiles absent after completion; input rebuilt once and removed 6 final explicit rows; GUI restarted with pythonw PID 115740 and no console window
+DESIGN_RESULT=设计思路.txt retained; current SHA256=658DC781DB7F5D0F2B39B27FE02596D2A2D5B19AD73CC659018638045876D4BD
