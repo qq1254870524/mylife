@@ -7,7 +7,7 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from controller import AppController
-from models import RunConfig
+from models import QUERY_BACKEND_BROWSER, QUERY_BACKENDS, RunConfig
 from proxy_pool import load_proxy_lines_from_design, parse_proxy_line
 from version import __version__
 
@@ -63,9 +63,18 @@ class MainWindow:
         controls.pack(fill="x", pady=(8, 0))
         self.thread_var = tk.IntVar(value=1)
         self.mode_var = tk.StringVar(value="小窗口")
+        self.backend_var = tk.StringVar(value=QUERY_BACKEND_BROWSER)
         self.proxy_enabled_var = tk.BooleanVar(value=False)
         ttk.Label(controls, text="线程数量").pack(side="left")
         ttk.Spinbox(controls, from_=1, to=100, width=6, textvariable=self.thread_var).pack(side="left", padx=(4, 18))
+        ttk.Label(controls, text="查询方式").pack(side="left")
+        ttk.Combobox(
+            controls,
+            values=QUERY_BACKENDS,
+            state="readonly",
+            width=9,
+            textvariable=self.backend_var,
+        ).pack(side="left", padx=(4, 18))
         ttk.Label(controls, text="浏览器模式").pack(side="left")
         ttk.Combobox(controls, values=("小窗口", "无头"), state="readonly", width=9, textvariable=self.mode_var).pack(side="left", padx=(4, 18))
         ttk.Checkbutton(controls, text="启动 SOCKS5 代理池", variable=self.proxy_enabled_var).pack(side="left")
@@ -141,6 +150,8 @@ class MainWindow:
         self.output_var.set(str(data.get("output_dir") or ""))
         self.thread_var.set(int(data.get("thread_count") or 1))
         self.mode_var.set(str(data.get("browser_mode") or "小窗口"))
+        backend = str(data.get("query_backend") or QUERY_BACKEND_BROWSER)
+        self.backend_var.set(backend if backend in QUERY_BACKENDS else QUERY_BACKEND_BROWSER)
         self.proxy_enabled_var.set(bool(data.get("proxy_enabled") or False))
         lines = [str(x) for x in data.get("proxy_lines", [])] if isinstance(data.get("proxy_lines"), list) else []
         if not lines:
@@ -154,6 +165,7 @@ class MainWindow:
             "output_dir": self.output_var.get().strip(),
             "thread_count": self.thread_var.get(),
             "browser_mode": self.mode_var.get(),
+            "query_backend": self.backend_var.get(),
             "proxy_enabled": self.proxy_enabled_var.get(),
             "proxy_lines": [row.value.get().strip() for row in self.proxy_rows if row.value.get().strip()],
         }
@@ -176,6 +188,7 @@ class MainWindow:
             output_dir=output_dir,
             thread_count=int(self.thread_var.get()),
             browser_mode=self.mode_var.get(),
+            query_backend=self.backend_var.get(),
             proxy_enabled=bool(self.proxy_enabled_var.get()),
             proxy_lines=lines,
         )

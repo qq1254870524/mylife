@@ -1,21 +1,20 @@
-CHANGED_BRANCH_FIELD=v1.1.4/runtime-resilience-headerless-xlsx-demographic-completeness-worker-persistence-terminal-counters
-BASELINE_COMMIT=a171f150ebf9e9a6684538c992f98811fc8d4f45
+CHANGED_BRANCH_FIELD=controller.proxy-wait/task-terminal-exit
+BASELINE_COMMIT=ce54de719aedcd2f9193226c8db7a5e94700ca28
 VERSION=1.1.4
-INPUT_ORIGINAL_SHA256=4D95ECCD26A6A2B35F36F9558CC2FF50649F7018A7EDAA24DDFC4967EBDC4B80
-INPUT_FINAL_SHA256=E6F37BA08C8F449DFE7883F315406A759F4F302D87546CEFFAB04B4951494A9A
-OUTPUT_FINAL_SHA256=B172CCB3299BD9C24769B6AE51A7615AD0F1AFC8308252E9A3496266A30162E5
-DESIGN_CURRENT_SHA256=658DC781DB7F5D0F2B39B27FE02596D2A2D5B19AD73CC659018638045876D4BD
-CONTROLLER_SHA256=245F237876D7088778A5553B2DD638A8755C8EE26AFB7763FDC5E021D3985236
-DATABASE_SHA256=CC99256BFDCA2594AE31985269437F4FF4E8BD2DEF28E9A449078C60FCACE379
-ROLLBACK_SHA256=0DBB99D0DF955A0EA6AC045933279225FA30A6EA591ECF854921F3D95F9FE35E
+CONTROLLER_ORIGINAL_SHA256=245F237876D7088778A5553B2DD638A8755C8EE26AFB7763FDC5E021D3985236
+CONTROLLER_MODIFIED_SHA256=9D8E8C772F29AC4B477FAB963ED4E0851E73B29BE744D566647083ECD95FDF1D
+CONTROLLER_TEST_ORIGINAL_SHA256=D3FC563AE8E7719A700FD505CDC28CA83856AB90D145085019C39CBD6013E7FE
+CONTROLLER_TEST_MODIFIED_SHA256=82ACBFBA4CF670FE10CE87C833DD123C9AD388F9A8AC33AE428BCA1ACCE0A8A5
+ROLLBACK_SHA256=E68FEA030A70940DCEE8B27EE0F62FAC7C32D594E82FC5DDFDA2F14EE0BAF115
 
 CHANGED_SCOPE:
-- 无表头 13/16 列人员 XLSX 自动识别、真实物理行定位、整行键去重和批次结束一次性删行。
-- 代理 SSL/TIMEOUT/SOCKS 瞬断无损重试、停止取消不消耗业务次数、旧耗尽 pending/retry 自动释放。
-- 队尾暂空时 worker 等待在途任务，四线程不再逐步丢失；profiles ACL 清理和终态发布顺序修复。
-- 输入完整生日补全、星座计算、搜索无结果来源说明；生日/性别/星座/备注原因完整审计。
-- SQLite 清理后 GUI 成功终态仍显示真实完成总数。
-- RELEASE_NOTES_v1.1.4.md、README.md、CHANGELOG.md 和回归测试同步更新。
+- 根因：worker 在领取任务前或代理通道错误后进入 ProxyPool.wait_until_ready；该循环只响应用户停止，不知道任务队列和 SQLite 已经全部终态，因此数据跑完后仍会反复测试出口 IP。
+- 只修改 controller.py 的代理等待终止控制；proxy_pool.py、浏览器、输入读取、匹配、输出和 GUI 模块保持不变。
+- 新增 _QueueDrainSignal：代理等待同时响应 stop_event、队列完成和 SQLite 不再含 pending/retry/running。
+- 空输入或全部任务已完成时不执行代理连通性测试、不创建浏览器，控制器直接进入“已完成”。
+- 其他线程处理完最后一条任务时，正在等待失效代理的 worker 最多结束当前一次网络检查后退出，不再开始下一轮 IP 检测。
+- 多个 worker 因同一批网络重试持有队列计数时，以 SQLite 终态作为最终退出依据，避免 unfinished_tasks 虚高造成永久等待。
+- 保留“仍有真实未完成任务时 worker 不提前消失”的既有行为。
+- 此前 input_loader.py 的 Citi 年龄格式解析修改完整保留。
 
-FINAL_DATA_RESULT=96 source tasks completed; CSV=96; birthdays=94; genders=92; zodiacs=94; remarks=96; failed=0; input data rows=0
-GUI_FINAL_STATE=pythonw PID 115740, v1.1.4, previous 4-thread/proxy-enabled settings loaded, no console window
+TEST_RESULT=controller 11/11; proxy pool 5/5; full suite 89/89; rollback controller 8/8 and retained-age full suite 86/86

@@ -1,6 +1,6 @@
 # MyLife 数据采集正式版
 
-版本：`1.1.1`
+版本：`1.1.5`
 
 ## 启动
 
@@ -17,6 +17,7 @@
 - 自动识别无表头的“电话/SSN/已有生日/姓名/年龄/地址/城市/州/邮编/邮箱/电话列表/出生年/参考年龄”人员 XLSX，第一物理行按数据处理；
 - 原输入列原样位于结果前部，MyLife 结果字段追加在后部；
 - 多浏览器处理线程 + 单独 SQLite 写入线程；队尾暂时无待领任务但仍有在途任务时，空闲 worker 保持等待，重试重新入队后不会丢线程；
+- GUI 新增“查询方式”：`HTTP接口` 使用浏览器初始化 Cloudflare 会话后，以每 worker 独立 HTTP 会话执行搜索和详情；`浏览器` 保留原 Patchright 全流程。
 - SQLite `WAL` 断点状态和 UTF-8 BOM CSV 实时落盘；
 - “姓名+城市州邮编”优先；任一搜索步骤的全部分页合计只有 1 人时直接确定；地点结果为空时自动回退“姓名”搜索，多候选且只有异龄候选时继续扩展并合并去重；
 - 主姓名仍没有同龄候选时尝试经过噪声过滤的曾用名，过滤地址文字和无关人员姓名；
@@ -64,6 +65,18 @@ Chromium 不支持带账号密码的 SOCKS5 直连，`socks_bridge.py` 会为每
 
 Patchright 的真 headless 模式会影响 Managed Turnstile token 签发，因此 GUI 的“无头”模式内部仍运行真实 Chrome，再只隐藏本次会话新增的窗口；不会触碰用户已有 Chrome 窗口。“小窗口”则保留可见浏览器便于实时观察。
 
+## HTTP 接口模式
+
+MyLife 的公开搜索入口会先经过 Cloudflare，普通 `requests` 直连会返回 403。因此 HTTP 模式采用浏览器/HTTP 接力，而不是盲目直连：
+
+1. 每个 worker 首次查询时用自己的 Patchright Chrome 完成 Cloudflare 会话初始化；
+2. 同步该浏览器的 Cookie、User-Agent 和对应 SOCKS5 代理出口到独立 `requests.Session`；
+3. 搜索分页和人物详情优先由 HTTP 会话读取，继续使用既有 HTML 解析、候选匹配和输出流程；
+4. 会话失效自动重新初始化一次，仍不兼容时使用当前浏览器文档兜底；
+5. 单人结束后保留 Cloudflare 会话供下一条复用，但清空当前页面、权限和浏览器缓存。
+
+HTTP 模式不会改变 SQLite、CSV、输入删行或字段规则，可以直接续跑已有断点。浏览器模式仍是默认值；需要启用时在 GUI“查询方式”中选择 `HTTP接口`。
+
 ## 输出
 
 - 实时 CSV：`输出目录/<输入文件名>_MyLife结果.csv`
@@ -81,6 +94,7 @@ CSV 每写一行都会 `flush + fsync`。输出完整保留原输入列，并在
 | `gui.py` | GUI、代理增删、实时监控 |
 | `controller.py` | 生命周期、线程、断点、批次收尾 |
 | `browser_worker.py` | Patchright 浏览器、人类式节奏、搜索/详情流程 |
+| `http_worker.py` | Cloudflare 浏览器初始化、HTTP 会话复用、自动重建与浏览器兜底 |
 | `identity_matcher.py` | 年龄分层、多信号身份评分、唯一候选选择 |
 | `search_planner.py` | 同龄候选判断、曾用名清洗、跨搜索候选合并去重 |
 | `demographics_enricher.py` | 严格同身份档案字段补充、完整生日确定星座 |

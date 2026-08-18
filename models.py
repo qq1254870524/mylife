@@ -6,6 +6,9 @@ from typing import Any
 
 
 SEARCH_REVISION = 6
+QUERY_BACKEND_BROWSER = "浏览器"
+QUERY_BACKEND_HTTP = "HTTP接口"
+QUERY_BACKENDS = (QUERY_BACKEND_HTTP, QUERY_BACKEND_BROWSER)
 
 
 @dataclass(slots=True)
@@ -93,6 +96,7 @@ class RunConfig:
     output_dir: Path
     thread_count: int = 1
     browser_mode: str = "小窗口"
+    query_backend: str = QUERY_BACKEND_BROWSER
     proxy_enabled: bool = False
     proxy_lines: list[str] = field(default_factory=list)
     max_job_attempts: int = 3

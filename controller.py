@@ -13,8 +13,15 @@ from typing import Callable
 from browser_worker import BrowserSession, Cancelled, CloudflareFailure
 from cross_row_enricher import enrich_cross_rows
 from database import DatabaseWriter, JobDatabase
+from http_worker import HttpInterfaceSession
 from input_loader import load_people
-from models import SEARCH_REVISION, PersonInput, RunConfig
+from models import (
+    QUERY_BACKEND_HTTP,
+    QUERY_BACKENDS,
+    SEARCH_REVISION,
+    PersonInput,
+    RunConfig,
+)
 from output_writer import RealtimeCsvWriter
 from proxy_pool import ProxyGeo, ProxyPool, ProxySpec, cleanup_profile_directory, parse_proxy_line
 from runtime_monitor import RuntimeHealthMonitor
@@ -22,6 +29,49 @@ from source_rewriter import RealtimeInputRewriter
 
 LogFn = Callable[[str], None]
 ProgressFn = Callable[[dict[str, int | str]], None]
+
+
+class _QueueDrainSignal:
+    """代理等待期间，同时响应用户停止和任务队列已经全部完成。"""
+
+    def __init__(
+        self,
+        stop_event: threading.Event,
+        job_queue: queue.Queue[tuple[int, PersonInput, int]],
+        finished_threshold: int = 0,
+        finished_check: Callable[[], bool] | None = None,
+    ) -> None:
+        self.stop_event = stop_event
+        self.job_queue = job_queue
+        self.finished_threshold = finished_threshold
+        self.finished_check = finished_check
+        self._next_finished_check = 0.0
+
+    def is_set(self) -> bool:
+        if self.stop_event.is_set() or self.job_queue.unfinished_tasks <= self.finished_threshold:
+            return True
+        now = time.monotonic()
+        if self.finished_check and now >= self._next_finished_check:
+            self._next_finished_check = now + 0.5
+            try:
+                return bool(self.finished_check())
+            except Exception:
+                return False
+        return False
+
+    def wait(self, timeout: float | None = None) -> bool:
+        deadline = None if timeout is None else time.monotonic() + max(0.0, timeout)
+        while not self.is_set():
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return False
+                delay = min(0.1, remaining)
+            else:
+                delay = 0.1
+            if self.stop_event.wait(delay):
+                return True
+        return True
 
 
 def _is_proxy_network_error(message: str) -> bool:
@@ -66,11 +116,14 @@ class AppController:
     def _log(self, message: str) -> None:
         clean = str(message).replace("\r", " ").strip()
         stamped = f"[{datetime.now():%H:%M:%S}] {clean}"
+        # 只在写日志文件时持锁。gui_log 最终会进入 Tk 主线程；如果持锁调用它，
+        # GUI 的“停止”回调又同步调用 _log，就会形成“后台线程等 Tk、Tk 等日志锁”
+        # 的互相等待，窗口会直接显示未响应。
         with self._log_lock:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             with self.log_path.open("a", encoding="utf-8") as handle:
                 handle.write(stamped + "\n")
-            self.gui_log(stamped)
+        self.gui_log(stamped)
 
     def _emit_progress(self, status: str) -> None:
         summary = self.database.summary(self.config.input_file)
@@ -107,8 +160,11 @@ class AppController:
         self.thread.start()
 
     def stop(self) -> None:
-        self._log("收到停止指令，正在结束所有线程并清理浏览器缓存")
+        already_stopping = self.stop_event.is_set()
+        # 先发布停止信号，不能让日志文件锁或 GUI 日志投递延迟浏览器线程退出。
         self.stop_event.set()
+        if not already_stopping:
+            self._log("收到停止指令，正在结束所有线程并清理浏览器缓存")
 
     def join(self, timeout: float | None = None) -> None:
         if self.thread:
@@ -122,6 +178,8 @@ class AppController:
             raise ValueError("线程数量至少为 1")
         if self.config.browser_mode not in {"小窗口", "无头"}:
             raise ValueError("浏览器模式只能是小窗口或无头")
+        if self.config.query_backend not in QUERY_BACKENDS:
+            raise ValueError("查询方式只能是 HTTP接口 或 浏览器")
         specs: list[ProxySpec] = []
         if self.config.proxy_enabled:
             specs = [parse_proxy_line(line, index) for index, line in enumerate(self.config.proxy_lines, 1) if line.strip()]
@@ -145,12 +203,17 @@ class AppController:
                 except OSError:
                     pass
 
+    def _all_source_jobs_terminal(self) -> bool:
+        summary = self.database.summary(self.config.input_file)
+        return not any(summary.get(status, 0) for status in ("pending", "retry", "running"))
+
     def _write_run_summary(self) -> None:
         payload = {
             "finished_at": datetime.now().astimezone().isoformat(timespec="seconds"),
             "status": self._final_status,
             "input_file": str(self.config.input_file),
             "output_file": str(self.output_path or ""),
+            "query_backend": self.config.query_backend,
             "total": self._total,
             "monitor": self.monitor.snapshot() if self.monitor else {},
         }
@@ -173,12 +236,25 @@ class AppController:
         try:
             geo = ProxyGeo()
             if proxy_spec and proxy_pool:
-                ready = proxy_pool.wait_until_ready(proxy_spec, self.stop_event)
+                # 代理不可用时不能无期限脱离任务队列循环检测。若其他线程已经把
+                # 最后一条任务处理完，本线程立即结束，不再继续刷新/检测出口 IP。
+                ready = proxy_pool.wait_until_ready(
+                    proxy_spec,
+                    _QueueDrainSignal(self.stop_event, job_queue),
+                )
                 if not ready:
-                    self._log(f"{proxy_spec.label} 等待恢复期间收到停止指令，本线程正常结束")
+                    if self.stop_event.is_set():
+                        self._log(f"{proxy_spec.label} 等待恢复期间收到停止指令，本线程正常结束")
+                    else:
+                        self._log(f"{proxy_spec.label} 等待恢复期间任务已全部完成，停止连通性检测")
                     return
                 geo = ready
-            session = BrowserSession(
+            session_class = (
+                HttpInterfaceSession
+                if self.config.query_backend == QUERY_BACKEND_HTTP
+                else BrowserSession
+            )
+            session = session_class(
                 worker_number=worker_number,
                 profile_dir=self.profile_root / f"worker-{worker_number}",
                 mode=self.config.browser_mode,
@@ -273,10 +349,24 @@ class AppController:
                             f"线程{worker_number} 检测到代理通道错误，关闭错误页并保持线程等待代理恢复"
                         )
                         session.close()
-                        refreshed_geo = proxy_pool.wait_until_ready(proxy_spec, self.stop_event)
+                        # 当前领取项和重新入队项会让 unfinished_tasks 临时多 1；当其他
+                        # worker 已处理重新入队项、只剩本线程待 task_done 时即可停止检测。
+                        recovery_signal = _QueueDrainSignal(
+                            self.stop_event,
+                            job_queue,
+                            finished_threshold=1,
+                            finished_check=self._all_source_jobs_terminal,
+                        )
+                        refreshed_geo = proxy_pool.wait_until_ready(proxy_spec, recovery_signal)
                         if refreshed_geo and not self.stop_event.is_set():
                             session.rebuild(refreshed_geo)
                             self._log(f"线程{worker_number} 代理恢复，已使用全新 profile 继续领取任务")
+                        elif not self.stop_event.is_set() and recovery_signal.is_set():
+                            self._log(
+                                f"线程{worker_number} 等待代理恢复期间全部任务已有明确结果，"
+                                "停止连通性检测"
+                            )
+                            break
                     elif next_attempt < self.config.max_job_attempts and not self.stop_event.is_set():
                         writer.put("retry", job_id, message)
                         job_queue.put((job_id, person, next_attempt))
@@ -311,7 +401,8 @@ class AppController:
             self._total = self.database.source_job_count(self.config.input_file)
             self._log(
                 f"当前输入识别 {len(people)} 行，断点任务 {existing_jobs} 条，"
-                f"新增数据库任务 {inserted} 条，待处理 {len(jobs)} 条"
+                f"新增数据库任务 {inserted} 条，待处理 {len(jobs)} 条；"
+                f"查询方式={self.config.query_backend}"
             )
             if requeued:
                 self._log(

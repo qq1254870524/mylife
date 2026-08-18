@@ -205,7 +205,14 @@ def _looks_unsupported_query(value: str) -> bool:
 
 
 def _normalize_age(value: str) -> str:
-    match = re.fullmatch(r"\s*(\d{1,3})(?:\.0+)?\s*", value or "")
+    clean = str(value or "").strip()
+    match = re.fullmatch(r"(\d{1,3})(?:\.0+)?", clean)
+    if not match:
+        match = re.fullmatch(
+            r"Age\s+(\d{1,3})(?:\s*,\s*Born\s+[A-Za-z]+\s+\d{4})?",
+            clean,
+            flags=re.IGNORECASE,
+        )
     if not match:
         return ""
     age = int(match.group(1))

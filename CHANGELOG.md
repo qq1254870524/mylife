@@ -1,5 +1,15 @@
 # 更新日志
 
+## v1.1.5 - 2026-08-17
+
+- 新增独立 `http_worker.py` HTTP 查询后端；GUI 可在“HTTP接口/浏览器”之间选择，原浏览器流程保持不变。
+- HTTP 模式由每个 worker 的 Patchright 首次完成 Cloudflare 会话初始化，随后复用独立 `requests.Session` 查询搜索页、分页和详情页；Cookie、User-Agent 与代理出口和该 worker 的浏览器保持一致。
+- HTTP 401/403/429、Cloudflare 页面或会话失效时自动重新同步浏览器 Cookie 并重试一次；HTTP 仍被拒绝时使用同会话浏览器文档兜底，不把未知页面写成明确结果。
+- HTTP 模式处理完单人后清空当前 DOM、权限和浏览器缓存，但保留同 worker 的 Cloudflare Cookie 与 HTTP 连接，下一人可直接走 HTTP；代理网络异常继续进入原有无损回队列和代理恢复流程。
+- HTTP 与浏览器后端共用现有搜索策略、候选合并、详情解析、身份匹配、SQLite 断点、实时 CSV 和输入重建，输出字段及历史结果不变。
+- 修复停止按钮与后台 GUI 日志投递争用日志锁造成的稳定死锁：日志文件写锁不再包住 Tk 回调，停止信号优先发布。
+- 新增 HTTP Cookie/代理继承、详情解析、会话失效重建、浏览器兜底、停止检查、控制器后端选择及停止死锁回归测试；完整测试 95 项通过。
+
 ## v1.1.4 - 2026-08-12
 
 - 修复用户点击“停止”时，底层导航或 Cloudflare 模块把取消包装成 `RuntimeError: cancelled` 后，当前输入行会被误标为 `failed` 的问题。

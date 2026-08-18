@@ -129,6 +129,28 @@ class InputLoaderTests(unittest.TestCase):
             _, people = load_people(path)
             self.assertEqual(people[0].age, "42")
 
+    def test_citi_inventory_age_text_is_normalized(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "people.csv"
+            with path.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["first_name", "last_name", "age"])
+                writer.writerow(["Jane", "Doe", "Age 38, Born October 1987"])
+                writer.writerow(["John", "Doe", "Age 66"])
+            _, people = load_people(path)
+            self.assertEqual([person.age for person in people], ["38", "66"])
+
+    def test_citi_inventory_age_text_remains_strict(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "people.csv"
+            with path.open("w", encoding="utf-8", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["first_name", "last_name", "age"])
+                writer.writerow(["Jane", "Doe", "Born October 1987"])
+                writer.writerow(["John", "Doe", "Age 130, Born October 1895"])
+            _, people = load_people(path)
+            self.assertEqual([person.age for person in people], ["", ""])
+
     def test_current_address_supplies_zip_when_city_state_column_has_no_zip(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "people.csv"

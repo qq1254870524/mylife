@@ -12,3 +12,7 @@ logs/
 测试文件*.xlsx
 测试文件*.csv
 verification/original_snapshot.zip
+# 本地运行资料与浏览器导出物不属于源码发布包
+导入资料/
+导出资料/
+verification/http_birthday_audit_*/

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import queue
 import tempfile
 import threading
 import time
@@ -10,8 +11,9 @@ from unittest.mock import patch
 
 import openpyxl
 
-from controller import AppController, _is_proxy_network_error
-from models import ProfileResult, RunConfig
+from controller import AppController, _QueueDrainSignal, _is_proxy_network_error
+from models import QUERY_BACKEND_HTTP, ProfileResult, RunConfig
+from proxy_pool import ProxySpec
 
 
 class FakeBrowserSession:
@@ -100,12 +102,159 @@ class PersistentWorkerFakeBrowserSession(FakeBrowserSession):
         ]
 
 
+class RepeatingConnectivityFakePool:
+    """模拟代理一直不可用；任务结束信号到达后必须立即退出检查循环。"""
+
+    def __init__(self) -> None:
+        self.checks = 0
+
+    def wait_until_ready(self, _spec: object, cancel: object) -> None:
+        for _ in range(200):
+            if cancel.is_set():
+                return None
+            self.checks += 1
+            if cancel.wait(0.002):
+                return None
+        raise AssertionError("任务全部结束后仍在反复测试 IP 连通性")
+
+
 class ControllerOfflineTests(unittest.TestCase):
+    def test_http_backend_selects_http_interface_worker(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "people.csv"
+            source.write_text("first_name,last_name\nJane,Doe\n", encoding="utf-8-sig")
+            controller = AppController(
+                RunConfig(
+                    source,
+                    root / "output",
+                    thread_count=1,
+                    browser_mode="无头",
+                    query_backend=QUERY_BACKEND_HTTP,
+                )
+            )
+            with patch("controller.HttpInterfaceSession", FakeBrowserSession), patch(
+                "controller.BrowserSession"
+            ) as browser_session:
+                controller.run()
+            browser_session.assert_not_called()
+            self.assertEqual(controller._final_status, "已完成")
+
+    def test_stop_does_not_deadlock_behind_background_gui_log_callback(self) -> None:
+        """后台日志等待 Tk 主线程时，停止回调不能反向等待同一把日志锁。"""
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "people.csv"
+            source.write_text("first_name,last_name\nJane,Doe\n", encoding="utf-8-sig")
+            callback_entered = threading.Event()
+            release_callback = threading.Event()
+
+            def gui_log(_message: str) -> None:
+                if threading.current_thread().name == "background-log-producer":
+                    callback_entered.set()
+                    release_callback.wait(5)
+
+            controller = AppController(
+                RunConfig(source, root / "output", thread_count=1, browser_mode="无头"),
+                log=gui_log,
+            )
+            producer = threading.Thread(
+                target=lambda: controller._log("后台日志"),
+                name="background-log-producer",
+            )
+            stopper = threading.Thread(target=controller.stop, name="simulated-gui-thread")
+            producer.start()
+            try:
+                self.assertTrue(callback_entered.wait(2), "后台日志回调未进入等待状态")
+                stopper.start()
+                self.assertTrue(controller.stop_event.wait(0.5), "停止信号被日志锁延迟")
+                stopper.join(0.5)
+                self.assertFalse(stopper.is_alive(), "GUI 停止回调被后台日志锁死")
+            finally:
+                release_callback.set()
+                producer.join(2)
+                stopper.join(2)
+
     def test_proxy_browser_connection_error_is_detected_for_refresh(self) -> None:
         self.assertTrue(_is_proxy_network_error("Page.goto: net::ERR_SOCKS_CONNECTION_FAILED"))
         self.assertTrue(_is_proxy_network_error("Page.goto: net::ERR_SSL_PROTOCOL_ERROR"))
         self.assertTrue(_is_proxy_network_error("Page.goto: net::ERR_TIMED_OUT"))
         self.assertFalse(_is_proxy_network_error("selector not found"))
+
+    def test_proxy_recovery_wait_stops_when_database_has_no_unfinished_jobs(self) -> None:
+        held_jobs: queue.Queue[tuple[int, object, int]] = queue.Queue()
+        held_jobs.put((1, object(), 0))
+        held_jobs.put((2, object(), 0))
+        signal = _QueueDrainSignal(
+            threading.Event(),
+            held_jobs,
+            finished_threshold=1,
+            finished_check=lambda: True,
+        )
+        self.assertTrue(signal.is_set())
+
+    def test_proxy_connectivity_wait_stops_when_all_jobs_are_finished(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "people.csv"
+            source.write_text("first_name,last_name\n", encoding="utf-8-sig")
+            logs: list[str] = []
+            controller = AppController(
+                RunConfig(source, root / "output", thread_count=1, browser_mode="无头"),
+                log=logs.append,
+            )
+            spec = ProxySpec(1, "proxy.example", 1080, "user", "pass", "https://refresh.example/change")
+
+            empty_queue: queue.Queue[tuple[int, object, int]] = queue.Queue()
+            empty_pool = RepeatingConnectivityFakePool()
+            controller._worker(1, empty_queue, object(), spec, empty_pool)
+            self.assertEqual(empty_pool.checks, 0)
+
+            inflight_queue: queue.Queue[tuple[int, object, int]] = queue.Queue()
+            inflight_queue.put((1, object(), 0))
+            waiting_pool = RepeatingConnectivityFakePool()
+
+            def finish_elsewhere() -> None:
+                time.sleep(0.02)
+                inflight_queue.get_nowait()
+                inflight_queue.task_done()
+
+            finisher = threading.Thread(target=finish_elsewhere)
+            finisher.start()
+            controller._worker(1, inflight_queue, object(), spec, waiting_pool)
+            finisher.join(1)
+
+            self.assertFalse(finisher.is_alive())
+            self.assertGreater(waiting_pool.checks, 0)
+            self.assertTrue(any("任务已全部完成，停止连通性检测" in line for line in logs))
+
+    def test_completed_input_finishes_without_starting_proxy_health_loop(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "people.csv"
+            source.write_text("first_name,last_name\n", encoding="utf-8-sig")
+            pool = RepeatingConnectivityFakePool()
+            controller = AppController(
+                RunConfig(
+                    source,
+                    root / "output",
+                    thread_count=1,
+                    browser_mode="无头",
+                    proxy_enabled=True,
+                    proxy_lines=["proxy.example:1080:user:pass|https://refresh.example/change"],
+                )
+            )
+
+            with (
+                patch("controller.ProxyPool", return_value=pool),
+                patch("controller.BrowserSession") as browser,
+            ):
+                controller.run()
+
+            self.assertEqual(controller._final_status, "已完成")
+            self.assertEqual(pool.checks, 0)
+            browser.assert_not_called()
 
     def test_full_pipeline_deletes_each_explicit_result_in_realtime(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
